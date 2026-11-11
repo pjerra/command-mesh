@@ -29,3 +29,11 @@
 .stale{opacity:.55}
 .unavail{opacity:.7}
 .proj{opacity:.55;margin-left:8px}
+
+/* LIVE | DEMO footer bar and the DEMO header tag. */
+.brand{display:flex;align-items:center;gap:12px}
+.demo-tag{font:9px Consolas,monospace;letter-spacing:2px;color:#060b13;background:#ffb86b;border-radius:3px;padding:3px 7px}
+#modes{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:14px;padding:12px 0 0;border-top:1px solid #203044}
+#modes button{background:#101c2c;border:1px solid #30445e;color:#91a7c2;border-radius:4px;padding:6px 14px;font:10px Consolas,monospace;letter-spacing:1.5px;cursor:pointer}
+#modes button:hover{background:#16363d;color:#53f4dd;border-color:#53f4dd88}
+#modes button[aria-pressed="true"]{background:#16363d;color:#53f4dd;border-color:#53f4dd88;box-shadow:0 0 10px #53f4dd22}

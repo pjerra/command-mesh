@@ -128,3 +128,92 @@ test('server: /state?demo=1 serves the demo board, /state stays live, the demo s
     handle.server.unref?.();
   }
 });
+
+function pageShell({ stored } = {}) {
+  const vm = require('vm');
+  const { page } = require('../lib/page');
+  const html = page('body{}');
+  const script = html.split('<script>')[1].split('</script>')[0];
+  const elements = new Map();
+  const urls = [];
+  const store = new Map(Object.entries(stored || {}));
+  const makeElement = name => {
+    const attrs = {};
+    const listeners = {};
+    const el = {
+      innerHTML: '', textContent: '', hidden: false, style: {}, dataset: {}, children: [], scrollTop: 0,
+      setAttribute(key, value) { attrs[key] = String(value); },
+      getAttribute(key) { return key in attrs ? attrs[key] : null; },
+      addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+      removeEventListener() {},
+      closest() { return null; },
+      querySelector() { return makeElement('child'); },
+      querySelectorAll() { return []; },
+      appendChild(child) { return child; },
+      before() {},
+      after() {},
+      prepend() {},
+      fire(type, event = {}) { for (const fn of listeners[type] || []) fn(event); },
+    };
+    el.classList = { toggle() {}, add() {}, remove() {}, contains() { return false; } };
+    return el;
+  };
+  const forSelector = selector => {
+    if (!elements.has(selector)) elements.set(selector, makeElement(selector));
+    return elements.get(selector);
+  };
+  const state = { entries: [], counts: {}, models: {}, presence: {}, usage: {}, sessions: {} };
+  const context = {
+    document: { querySelector: forSelector, querySelectorAll: () => [], createElement: () => makeElement('new') },
+    fetch: async url => {
+      urls.push(String(url));
+      return { json: async () => ({ state, svg: '<svg/>' }) };
+    },
+    setInterval: () => 0,
+    setTimeout: () => 0,
+    MutationObserver: class { observe() {} disconnect() {} },
+    localStorage: {
+      getItem: key => (store.has(key) ? store.get(key) : null),
+      setItem: (key, value) => store.set(key, String(value)),
+      removeItem: key => store.delete(key),
+    },
+    console,
+  };
+  vm.createContext(context);
+  vm.runInContext(script, context, { filename: 'page-script.js' });
+  return { elements, urls, store };
+}
+
+const settle = async () => {
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+};
+
+test('page: DEMO switches the request to demo=1 and shows the DEMO tag; LIVE switches back to /state and removes it', async () => {
+  const shell = pageShell();
+  await settle();
+  assert.ok(!shell.urls.at(-1).includes('demo=1'), 'starts on the live feed');
+  assert.strictEqual(shell.elements.get('#demo-tag').hidden, true, 'tag hidden on LIVE');
+  assert.strictEqual(shell.elements.get('#mode-live').getAttribute('aria-pressed'), 'true');
+
+  shell.elements.get('#mode-demo').fire('click');
+  await settle();
+  assert.ok(shell.urls.at(-1).includes('demo=1'), 'DEMO requests the demo board');
+  assert.strictEqual(shell.elements.get('#demo-tag').hidden, false, 'DEMO tag shown');
+  assert.strictEqual(shell.elements.get('#mode-demo').getAttribute('aria-pressed'), 'true');
+  assert.strictEqual(shell.elements.get('#mode-live').getAttribute('aria-pressed'), 'false');
+  assert.strictEqual(shell.elements.get('#summary').textContent, 'Demo: fake activity');
+  assert.strictEqual(shell.store.get('command-mesh-demo'), '1', 'choice persisted');
+
+  shell.elements.get('#mode-live').fire('click');
+  await settle();
+  assert.ok(!shell.urls.at(-1).includes('demo=1'), 'LIVE switches back to /state');
+  assert.strictEqual(shell.elements.get('#demo-tag').hidden, true, 'tag removed on LIVE');
+  assert.strictEqual(shell.elements.get('#mode-demo').getAttribute('aria-pressed'), 'false');
+  assert.strictEqual(shell.store.get('command-mesh-demo'), '0');
+
+  const remembered = pageShell({ stored: { 'command-mesh-demo': '1' } });
+  await settle();
+  assert.strictEqual(remembered.elements.get('#demo-tag').hidden, false, 'remembered choice restored');
+  assert.ok(remembered.urls.at(-1).includes('demo=1'), 'remembered mode fetches the demo board');
+});
