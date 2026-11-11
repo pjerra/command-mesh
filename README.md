@@ -50,12 +50,12 @@ What is stored: station, short label (tool name plus at most the last two path s
 
 ## Reading the grid
 
-Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. Under each busy core the dashboard shows how many sessions were active in the last two minutes, and under OMP the session cost in dollars.
+Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under OMP the grid shows the cost in dollars since the dashboard started.
 
 ## Tests
 
 ```sh
-node --test test/
+npm test
 ```
 
 ## License
