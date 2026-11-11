@@ -45,7 +45,7 @@ function presenceOf(board, provider, entries, now) {
 function drawMap(board, now) {
   const entries = board.entries || []
   const active = entries.filter(e => e.status === 'run')
-  const cyan = COLORS.omp, violet = COLORS.codex
+  const cyan = '#53f4dd', violet = '#a28aff'
   let body = `<style>@keyframes orbit{to{transform:rotate(360deg)}}@keyframes reactor{50%{opacity:.35}}@keyframes corePulse{50%{opacity:.35;transform:scale(1.12)}}@keyframes stream{to{stroke-dashoffset:-48}}@keyframes nodePulse{50%{opacity:.8}}.stream{animation:stream 1.2s linear infinite;animation-delay:-${(now%1200)/1000}s}.node-pulse{animation:nodePulse 2s ease-in-out infinite;animation-delay:-${(now%2000)/1000}s}.provider-pulse{transform-box:fill-box;transform-origin:center;animation:corePulse 1.8s ease-in-out infinite;animation-delay:-${(now%1800)/1000}s}.sweep{animation-duration:18s;animation-delay:-${(now%18000)/1000}s}.inner-orbit{animation-duration:9s;animation-delay:-${(now%9000)/1000}s}.orbit{transform-origin:450px 285px;animation:orbit 24s linear infinite;animation-delay:-${(now%24000)/1000}s}.counter{animation-direction:reverse;animation-duration:36s;animation-delay:-${(now%36000)/1000}s}.reactor{animation:reactor 2.4s ease-in-out infinite;animation-delay:-${(now%2400)/1000}s}`
     + `@keyframes breathe{0%,100%{opacity:.03}50%{opacity:.15}}.breathe{animation:breathe 4.8s ease-in-out infinite}`
     + `@keyframes shock{0%{transform:scale(.6);opacity:.95;stroke-width:3.5}100%{transform:scale(3.2);opacity:0;stroke-width:.3}}.shock{transform-box:fill-box;transform-origin:center;animation:shock 1.5s cubic-bezier(.15,.7,.3,1) both}`
