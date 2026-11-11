@@ -10,3 +10,5 @@ command-mesh-preview.png
 .kiro/command-mesh/state.json*
 .kiro/command-mesh/bridge.lock
 .vscode/settings.json
+.notes/
+node_modules/
