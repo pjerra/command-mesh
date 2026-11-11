@@ -22,3 +22,17 @@ test('renderer: svg names CLAUDE, CODEX and OMP', () => {
   assert.deepStrictEqual(drawMap.providerFor({ id: 'claude-you-1' }), 'claude');
   assert.deepStrictEqual(drawMap.providerFor({ id: 'omp-tool-1' }), 'omp');
 });
+
+test('renderer: core name shows session multiplier, no SESSIONS line', () => {
+  const board = {
+    entries: [],
+    counts: {},
+    models: { claude: 'opus', codex: 'gpt', omp: 'gpt-5' },
+    presence: { claude: true, codex: true, omp: true, at: Date.now() },
+    usage: {},
+    sessions: { claude: 2, codex: 1, omp: 0 },
+  };
+  const svg = drawMap(board, Date.now());
+  assert.ok(svg.includes('CLAUDE ×2'), 'multi-session core named CLAUDE ×2');
+  assert.ok(!svg.includes('SESSIONS'), 'no SESSIONS line');
+});

@@ -6,7 +6,7 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const { createBoard } = require('./lib/board');
-const { startTail } = require('./lib/tail');
+const { startTail, walkJsonl } = require('./lib/tail');
 const { startPresence } = require('./lib/presence');
 const { page } = require('./lib/page');
 const drawMap = require('./futuristic-renderer');
@@ -38,12 +38,13 @@ function start({ port, home, only = '', timers = true } = {}) {
   const sources = [claude, codex, omp];
   const tails = sources.map(source => {
     const ctx = { board, now: Date.now, only: only || '' };
+    const tailRoot = source.root(resolvedHome);
     const tail = startTail({
-      root: source.root(resolvedHome),
+      root: tailRoot,
       onEvent: (session, event) => source.handle(ctx, session, event),
       timers,
     });
-    return { source, tail, root: source.root(resolvedHome) };
+    return { source, tail, root: tailRoot, maxDepth: 5 };
   });
   const presence = timers ? startPresence({ board }) : { dispose() {} };
 
@@ -64,27 +65,11 @@ function start({ port, home, only = '', timers = true } = {}) {
     response.end('not found');
   });
 
-  function countFiles(rootDir) {
+  function countFiles(tail) {
     try {
-      let n = 0;
-      const pending = [rootDir];
-      let depth = 0;
-      void depth;
-      while (pending.length) {
-        const dir = pending.pop();
-        let items;
-        try {
-          items = fs.readdirSync(dir, { withFileTypes: true });
-        } catch {
-          continue;
-        }
-        for (const item of items) {
-          const full = path.join(dir, item.name);
-          if (item.isDirectory()) pending.push(full);
-          else if (item.isFile() && item.name.endsWith('.jsonl')) n++;
-        }
-      }
-      return n;
+      const found = [];
+      walkJsonl(tail.root, tail.maxDepth, found);
+      return found.length;
     } catch {
       return 0;
     }
@@ -105,8 +90,8 @@ function start({ port, home, only = '', timers = true } = {}) {
       const address = server.address();
       actualPort = typeof address === 'object' && address ? address.port : resolvedPort;
       console.log(`Command Mesh: http://127.0.0.1:${actualPort}/`);
-      for (const { source, root: sourceRoot } of tails) {
-        console.log(`${source.provider}: ${sourceRoot} (${countFiles(sourceRoot)} session files)`);
+      for (const entry of tails) {
+        console.log(`${entry.source.provider}: ${entry.root} (${countFiles(entry)} session files)`);
       }
       resolve();
     });
@@ -139,11 +124,13 @@ if (require.main === module) {
     console.log('Usage: node mesh.js [--port N] [--home DIR] [--only PREFIX]');
     process.exit(0);
   }
-  const { close } = start({
+  const handle = start({
     port: args.port ?? (process.env.MESH_PORT ? Number(process.env.MESH_PORT) : 4777),
     home: args.home || os.homedir(),
     only: args.only || '',
   });
+  handle.ready.catch(() => process.exit(1));
+  const { close } = handle;
   const shutdown = () => {
     close().then(() => process.exit(0));
   };

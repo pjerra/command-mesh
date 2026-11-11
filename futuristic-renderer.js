@@ -138,23 +138,19 @@ function drawMap(board, now) {
       body += `<circle class="shock" cx="${x}" cy="${y}" r="34" fill="none" stroke="#ffffff" opacity=".7" style="${since(shockAge - 180)}"/>`
     }
     if (offline) {
-      body += `<path d="${hexPath(x, y, 34)}" fill="#0a131d" stroke="${OFF}" stroke-width="1.2" stroke-dasharray="4 4"/><path d="${hexPath(x, y, 23)}" fill="none" stroke="${OFF}" stroke-opacity=".8"/><text x="${x}" y="${y + 5}" text-anchor="middle" fill="#4b6075" font-size="13">--</text><circle cx="${x - 34}" cy="${y - 29}" r="3.5" fill="${OFF}"/><text x="${x}" y="${y + 48}" text-anchor="middle" fill="#55697d" font-size="11" letter-spacing="1.7">${provider.label}</text><rect x="${x - 50}" y="${y + 54}" width="100" height="17" rx="8.5" fill="#07111c" stroke="${OFF}"/><text x="${x}" y="${y + 65.5}" text-anchor="middle" fill="#5f7488" font-size="8.5" letter-spacing="2">OFFLINE</text>`
+      body += `<path d="${hexPath(x, y, 34)}" fill="#0a131d" stroke="${OFF}" stroke-width="1.2" stroke-dasharray="4 4"/><path d="${hexPath(x, y, 23)}" fill="none" stroke="${OFF}" stroke-opacity=".8"/><text x="${x}" y="${y + 5}" text-anchor="middle" fill="#4b6075" font-size="13">--</text><circle cx="${x - 34}" cy="${y - 29}" r="3.5" fill="${OFF}"/><text x="${x}" y="${y + 48}" text-anchor="middle" fill="#55697d" font-size="11" letter-spacing="1.7">${provider.label}${(board.sessions?.[provider.id] || 0) > 1 ? " ×" + board.sessions[provider.id] : ""}</text><rect x="${x - 50}" y="${y + 54}" width="100" height="17" rx="8.5" fill="#07111c" stroke="${OFF}"/><text x="${x}" y="${y + 65.5}" text-anchor="middle" fill="#5f7488" font-size="8.5" letter-spacing="2">OFFLINE</text>`
     } else {
-      body += `<path d="${hexPath(x, y, 34)}" fill="#0b1a27" stroke="${lit ? color : '#385267'}" stroke-width="${lit ? 2.4 : 1.4}"/><path d="${hexPath(x, y, 23)}" fill="${color}" fill-opacity="${lit ? '.28' : '.09'}" stroke="${color}" stroke-opacity="${lit ? '.8' : '.25'}"/><text x="${x}" y="${y + 5}" text-anchor="middle" fill="${lit ? '#efffff' : '#7890a7'}" font-size="13">${String(providerEntries.length).padStart(2,'0')}</text><circle cx="${x - 34}" cy="${y - 29}" r="3.5" fill="${running ? color : '#3c566a'}"/><text x="${x}" y="${y + 48}" text-anchor="middle" fill="${lit ? color : '#9bb0c4'}" font-size="11" letter-spacing="1.7">${provider.label}</text><rect x="${x - 50}" y="${y + 54}" width="100" height="17" rx="8.5" fill="#07111c" stroke="${color}" stroke-opacity="${lit ? '.45' : '.18'}"/><text x="${x}" y="${y + 65.5}" text-anchor="middle" fill="#9bb0c4" font-size="8.5">${esc(String(model).slice(0, 22))}</text>`
+      body += `<path d="${hexPath(x, y, 34)}" fill="#0b1a27" stroke="${lit ? color : '#385267'}" stroke-width="${lit ? 2.4 : 1.4}"/><path d="${hexPath(x, y, 23)}" fill="${color}" fill-opacity="${lit ? '.28' : '.09'}" stroke="${color}" stroke-opacity="${lit ? '.8' : '.25'}"/><text x="${x}" y="${y + 5}" text-anchor="middle" fill="${lit ? '#efffff' : '#7890a7'}" font-size="13">${String(providerEntries.length).padStart(2,'0')}</text><circle cx="${x - 34}" cy="${y - 29}" r="3.5" fill="${running ? color : '#3c566a'}"/><text x="${x}" y="${y + 48}" text-anchor="middle" fill="${lit ? color : '#9bb0c4'}" font-size="11" letter-spacing="1.7">${provider.label}${(board.sessions?.[provider.id] || 0) > 1 ? " ×" + board.sessions[provider.id] : ""}</text><rect x="${x - 50}" y="${y + 54}" width="100" height="17" rx="8.5" fill="#07111c" stroke="${color}" stroke-opacity="${lit ? '.45' : '.18'}"/><text x="${x}" y="${y + 65.5}" text-anchor="middle" fill="#9bb0c4" font-size="8.5">${esc(String(model).slice(0, 22))}</text>`
     }
-    const sessionCount = board.sessions?.[provider.id] || 0
     const ompUsage = provider.id === 'omp' ? board.usage?.omp : undefined
-    if (!offline && sessionCount > 0) {
-      const cost = ompUsage ? ' \u00b7 $' + Number(ompUsage.session || 0).toFixed(2) : ''
-      body += `<rect x="${x - 96}" y="${y + 76}" width="192" height="11" rx="5.5" fill="#080e19" opacity=".9"/>`
-      body += `<text x="${x}" y="${y + 84}" text-anchor="middle" fill="#7f93a8" font-size="8" letter-spacing="1">${sessionCount} SESSION${sessionCount === 1 ? '' : 'S'}${cost}</text>`
-    }
     if (ompUsage && !offline) {
+      body += `<rect x="${x - 96}" y="${y + 76}" width="192" height="11" rx="5.5" fill="#080e19" opacity=".9"/>`
+      body += `<text x="${x}" y="${y + 84}" text-anchor="middle" fill="#7f93a8" font-size="8" letter-spacing="1">SESSION COST $${Number(ompUsage.session || 0).toFixed(2)}</text>`
       const usageAge = now - (Number(ompUsage.lastAt) || 0)
       const fresh = usageAge >= 0 && usageAge < 2600
       if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+$${Number(ompUsage.last || 0).toFixed(3)}</text>`
     }
-    body += `<title>${provider.label} · ${offline ? 'offline' : running ? running + ' active' : 'idle'} · ${esc(model)}</title></g>`
+    body += `<title>${provider.label} · ${offline ? 'offline' : running ? running + ' active' : 'idle'} · ${esc(model)} · ${board.sessions?.[provider.id] || 0} sessions</title></g>`
   })
 
   body += `<text x="450" y="444" fill="#5c7891" font-size="8" letter-spacing="3" text-anchor="middle">MULTI-AGENT BUS${active.length ? ` · ${active.length} ACTIVE CHANNEL${active.length === 1 ? '' : 'S'}` : ''}</text>`

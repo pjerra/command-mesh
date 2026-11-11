@@ -37,3 +37,11 @@ test('classify: shortLabel cases', () => {
   assert.strictEqual(shortLabel('Task', { subagent_type: 'Explore' }), 'Task Explore');
   assert.strictEqual(shortLabel('frobnicate', {}), 'frobnicate');
 });
+
+test('classify: shell labels strip assignments, cd chains, and wrappers', () => {
+  assert.strictEqual(shortLabel('Bash', { command: 'S=/tmp/x; curl a' }), 'Bash curl');
+  assert.strictEqual(shortLabel('Bash', { command: 'API_KEY=sk-secret curl x' }), 'Bash curl');
+  assert.strictEqual(shortLabel('Bash', { command: 'cd /a/b && git status' }), 'Bash git');
+  assert.strictEqual(shortLabel('Bash', { command: '"$HOME/bin/x" y' }), 'Bash');
+  assert.strictEqual(shortLabel('Bash', { command: 'sudo docker ps' }), 'Bash docker');
+});

@@ -191,4 +191,14 @@ test('privacy: a prompt text and a bash command argument never appear in JSON.st
   assert.ok(!json.includes(secret), 'prompt text leaked');
   assert.ok(!json.includes(cmd), 'command args leaked');
   assert.ok(!json.includes('hunter2'), 'token leaked');
+  claude.handle(ctx, s, {
+    type: 'assistant', uuid: 'ua2', sessionId: 'sp', timestamp: new Date(NOW).toISOString(),
+    message: {
+      model: 'm', stop_reason: null,
+      content: [{ type: 'tool_use', id: 'tq', name: 'Bash', input: { command: 'TOKEN=sk-secret-123 curl https://x' } }],
+    },
+  });
+  const json2 = JSON.stringify(ctx.board.snapshot());
+  assert.ok(!json2.includes('sk-secret-123'), 'assignment value leaked');
+  assert.strictEqual(ctx.board.snapshot().entries.find(e => e.id === 'claude-tool-tq').label, 'Bash curl');
 });
