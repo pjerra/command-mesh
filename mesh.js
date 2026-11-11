@@ -14,10 +14,11 @@ const claude = require('./lib/sources/claude');
 const codex = require('./lib/sources/codex');
 const omp = require('./lib/sources/omp');
 const { startCodexLog } = require('./lib/sources/codex-log');
-const dashboardCss = fs.readFileSync(path.join(__dirname, 'dashboard.css'), 'utf8');
+const { startLimits } = require('./lib/limits');
 
+const dashboardCss = fs.readFileSync(path.join(__dirname, 'dashboard.css'), 'utf8');
 function parseArgs(argv) {
-  const out = { port: null, home: null, only: '' };
+  const out = { port: null, home: null, only: '', noLimits: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--port' && i + 1 < argv.length) out.port = Number(argv[++i]);
@@ -26,12 +27,13 @@ function parseArgs(argv) {
     else if (arg.startsWith('--home=')) out.home = arg.slice('--home='.length);
     else if (arg === '--only' && i + 1 < argv.length) out.only = argv[++i];
     else if (arg.startsWith('--only=')) out.only = arg.slice('--only='.length);
+    else if (arg === '--no-limits') out.noLimits = true;
     else if (arg === '--help' || arg === '-h') out.help = true;
   }
   return out;
 }
 
-function start({ port, home, only = '', timers = true } = {}) {
+function start({ port, home, only = '', timers = true, noLimits = false } = {}) {
   const resolvedPort = port ?? (process.env.MESH_PORT ? Number(process.env.MESH_PORT) : 4777);
   const resolvedHome = home || os.homedir();
   const board = createBoard({});
@@ -48,6 +50,7 @@ function start({ port, home, only = '', timers = true } = {}) {
   });
   const presence = timers ? startPresence({ board }) : { dispose() {} };
   const codexLog = startCodexLog({ board, home: resolvedHome, only: only || '', timers });
+  const limits = noLimits ? { refresh: async () => {}, dispose() {} } : startLimits({ board, home: resolvedHome, timers });
   const server = http.createServer((request, response) => {
     const urlPath = (request.url || '/').split('?')[0];
     if (urlPath === '/state') {
@@ -95,7 +98,18 @@ function start({ port, home, only = '', timers = true } = {}) {
         console.log(`${entry.source.provider}: ${entry.root}${folders > 1 ? ` + ${folders - 1} profile folders` : ''} (${countFiles(entry)} session files)`);
       }
       console.log(codexLog.enabled ? `codex live log: ${codexLog.path}` : `codex live log: not available (${codexLog.reason || 'unknown'})`);
-      resolve();
+      limits.refresh().catch(() => {}).finally(() => {
+        const snap = board.snapshot().limits || {};
+        const claudeState = snap.claude ? snap.claude.status : 'pending';
+        let ompProfiles = 0;
+        try {
+          ompProfiles = omp.roots ? omp.roots(resolvedHome).length - 1 : 0;
+        } catch {
+          ompProfiles = 0;
+        }
+        console.log(`limits: claude ${claudeState}, codex scheduled, omp ${Math.max(0, ompProfiles)} profiles`);
+        resolve();
+      });
     });
   });
 
@@ -118,23 +132,29 @@ function start({ port, home, only = '', timers = true } = {}) {
       } catch {
         // Ignore dispose errors.
       }
+      try {
+        limits.dispose();
+      } catch {
+        // Ignore dispose errors.
+      }
       server.close(() => resolve());
     });
   }
 
-  return { server, board, tails, codexLog, get port() { return actualPort; }, ready, close };
+  return { server, board, tails, codexLog, limits, get port() { return actualPort; }, ready, close };
 }
 
 if (require.main === module) {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
-    console.log('Usage: node mesh.js [--port N] [--home DIR] [--only PREFIX]');
+    console.log('Usage: node mesh.js [--port N] [--home DIR] [--only PREFIX] [--no-limits]');
     process.exit(0);
   }
   const handle = start({
     port: args.port ?? (process.env.MESH_PORT ? Number(process.env.MESH_PORT) : 4777),
     home: args.home || os.homedir(),
     only: args.only || '',
+    noLimits: args.noLimits || false,
   });
   handle.ready.catch(() => process.exit(1));
   const { close } = handle;

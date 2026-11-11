@@ -33,6 +33,7 @@ MESH_PORT=4788 node mesh.js
 | `--home DIR` | your home folder | Where the three session folders below are looked up |
 | `--only PREFIX` | empty | Only record sessions whose working directory starts with PREFIX |
 | `--help` | | Print usage and exit |
+| `--no-limits` | off | Skip the LIMITS strip readers |
 
 ## Sources
 
@@ -43,6 +44,16 @@ MESH_PORT=4788 node mesh.js
 | Codex live log | `<home>/.codex/logs_<N>.sqlite` (highest N, read-only) | CODEX |
 | omp agent sessions | `<home>/.omp/agent/sessions` | OMP |
 The board lives in memory in the one `node mesh.js` process. There is no state file.
+
+## Limits
+
+A LIMITS strip sits between the KPIs and the activity bars, one row per account: Claude reads
+`<home>/.claude/cache/usage_monthly.json` (refresh 60 s; missing file means the row is hidden), Codex
+asks `codex app-server` over JSON-RPC (refresh 180 s; the read itself uses no quota), omp runs
+`omp --profile <p> usage -p opencode-go --json` once per profile under `<home>/.omp/profiles`
+(refresh 300 s). Nothing about the accounts is stored beyond the window labels, percents, reset
+times, plan names, and staleness the strip shows. The Claude row needs a status line that writes
+that cache file; without it the row stays hidden. `--no-limits` skips these readers.
 
 ## Privacy
 
