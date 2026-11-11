@@ -13,7 +13,7 @@ const drawMap = require('./futuristic-renderer');
 const claude = require('./lib/sources/claude');
 const codex = require('./lib/sources/codex');
 const omp = require('./lib/sources/omp');
-
+const { startCodexLog } = require('./lib/sources/codex-log');
 const dashboardCss = fs.readFileSync(path.join(__dirname, 'dashboard.css'), 'utf8');
 
 function parseArgs(argv) {
@@ -47,7 +47,7 @@ function start({ port, home, only = '', timers = true } = {}) {
     return { source, tail, roots, root: source.root(resolvedHome), maxDepth: 5 };
   });
   const presence = timers ? startPresence({ board }) : { dispose() {} };
-
+  const codexLog = startCodexLog({ board, home: resolvedHome, only: only || '', timers });
   const server = http.createServer((request, response) => {
     const urlPath = (request.url || '/').split('?')[0];
     if (urlPath === '/state') {
@@ -94,6 +94,7 @@ function start({ port, home, only = '', timers = true } = {}) {
         const folders = entry.roots().length;
         console.log(`${entry.source.provider}: ${entry.root}${folders > 1 ? ` + ${folders - 1} profile folders` : ''} (${countFiles(entry)} session files)`);
       }
+      console.log(codexLog.enabled ? `codex live log: ${codexLog.path}` : `codex live log: not available (${codexLog.reason || 'unknown'})`);
       resolve();
     });
   });
@@ -112,11 +113,16 @@ function start({ port, home, only = '', timers = true } = {}) {
       } catch {
         // Ignore dispose errors.
       }
+      try {
+        codexLog.dispose();
+      } catch {
+        // Ignore dispose errors.
+      }
       server.close(() => resolve());
     });
   }
 
-  return { server, board, tails, get port() { return actualPort; }, ready, close };
+  return { server, board, tails, codexLog, get port() { return actualPort; }, ready, close };
 }
 
 if (require.main === module) {

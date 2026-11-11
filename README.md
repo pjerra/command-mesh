@@ -14,7 +14,7 @@ Command Mesh is based on the original [Lot Map](https://github.com/alexeyw/lot-m
 
 ## Requirements
 
-Node 20 or later. Linux, WSL, or macOS.
+Node 20 or later. Linux, WSL, or macOS. The Codex live log needs Node 22.5+ for its `node:sqlite` read; the rest works on 20.
 
 ## Run
 
@@ -40,13 +40,13 @@ MESH_PORT=4788 node mesh.js
 | --- | --- | --- |
 | Claude Code sessions | `<home>/.claude/projects` | CLAUDE |
 | Codex sessions | `<home>/.codex/sessions` | CODEX |
+| Codex live log | `<home>/.codex/logs_<N>.sqlite` (highest N, read-only) | CODEX |
 | omp agent sessions | `<home>/.omp/agent/sessions` | OMP |
-
 The board lives in memory in the one `node mesh.js` process. There is no state file.
 
 ## Privacy
 
-What is stored: station, short label (tool name plus at most the last two path segments or the first word of a shell command), status, timestamps, counts, model name, session cost for omp, and whether each agent process is running. What is never stored: prompt text, tool arguments beyond the short label, tool output, or response text.
+What is stored: station, short label (tool name plus at most the last two path segments or the first word of a shell command), status, timestamps, counts, model name, session cost for omp, and whether each agent process is running. What is never stored: prompt text, tool arguments beyond the short label, tool output, or response text. The Codex live log reads turn ids, tool names, durations, cwd, and model from its SQLite rows; prompt text in that log is never read.
 
 ## Reading the grid
 
