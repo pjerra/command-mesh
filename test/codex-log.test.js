@@ -32,7 +32,7 @@ const NOW = 1_700_000_000_000;
 const NOW_S = Math.floor(NOW / 1000);
 const COLS = 'id INTEGER, ts INTEGER, ts_nanos INTEGER, level TEXT, target TEXT, feedback_log_body TEXT, module_path TEXT, file TEXT, line INTEGER, thread_id TEXT, process_uuid TEXT, estimated_bytes INTEGER';
 const TURN = '0aaa1111-2222-7333-8444-555566667777';
-const SUB_BODY = `Submission sub=Submission { id: "${TURN}", op: TurnInput { prompt: "SECRET-PROMPT-TEXT" } }`;
+const SUB_BODY = `session_loop{thread_id=0bbb1111-2222-7333-8444-555566667777}: Submission sub=Submission { id: "${TURN}", op: TurnInput { prompt: "SECRET-PROMPT-TEXT" } }`;
 const TOOL_BODY = 'session_loop{thread_id=T-1}:submission_dispatch{turn_id=T-1 model=gpt-5.6-sol cwd=/home/user/demo}: turn_id=T-1 tool_name=exec call_id=call_abc123 tool_source="direct" execution_started=true dispatch_duration_ms=0 handler_duration_ms=90 total_duration_ms=90';
 
 function reader(t, opts = {}) {
