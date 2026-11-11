@@ -78,3 +78,53 @@ test('demo: limits cover ok, warn, crit and exhausted', () => {
   assert.strictEqual(month.exhausted, true);
   assert.strictEqual(month.usedPercent, 100);
 });
+
+test('server: /state?demo=1 serves the demo board, /state stays live, the demo stops after 60 s idle', async () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { start } = require('../mesh');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-demo-'));
+  let clock = NOW;
+  const handle = start({ port: 0, home, timers: false, noLimits: true, now: () => clock, demoIdleMs: 60e3 });
+  await handle.ready;
+  try {
+    const base = `http://127.0.0.1:${handle.port}`;
+    const first = await (await fetch(base + '/state?demo=1')).json();
+    assert.strictEqual(first.state.demo, true);
+    assert.ok(first.state.entries.length > 0, 'demo has entries immediately');
+    assert.ok(first.state.entries.every(e => e.id.startsWith('demo-')), 'demo ids are prefixed');
+    assert.ok(handle.demo, 'the started demo is exposed');
+
+    const dir = path.join(home, '.claude', 'projects', 'x');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 's.jsonl'), '');
+    const tail = handle.tails.find(t => t.source.provider === 'claude').tail;
+    tail.discover();
+    fs.appendFileSync(path.join(dir, 's.jsonl'), JSON.stringify({
+      type: 'user', uuid: 'live-1', sessionId: 'live-s', cwd: '/home/user/demo',
+      timestamp: new Date().toISOString(), message: { content: 'hello there' },
+    }) + '\n');
+    tail.poll();
+
+    const live = await (await fetch(base + '/state')).json();
+    assert.ok(live.state.entries.some(e => e.id === 'claude-you-live-1'), 'live board recorded the line');
+    assert.ok(!('demo' in live.state), 'live state has no demo flag');
+    assert.ok(live.state.entries.every(e => !e.id.startsWith('demo-')), 'no demo entry in the live board');
+
+    const second = await (await fetch(base + '/state?demo=1')).json();
+    assert.ok(!JSON.stringify(second.state).includes('live-1'), 'live activity never reaches the demo');
+    assert.ok(second.state.entries.every(e => !e.id.includes('live-')), 'demo board only carries demo ids');
+
+    clock += 61e3;
+    await fetch(base + '/state');
+    assert.strictEqual(handle.demo, null, 'demo stops after the idle window');
+    const third = await (await fetch(base + '/state?demo=1')).json();
+    assert.strictEqual(third.state.demo, true);
+    assert.ok(third.state.entries.length > 0, 'restarted demo has entries');
+    assert.ok(third.state.entries[0].startedAt > first.state.entries[0].startedAt, 'restart is a fresh run');
+  } finally {
+    await handle.close();
+    handle.server.unref?.();
+  }
+});

@@ -15,6 +15,7 @@ const codex = require('./lib/sources/codex');
 const omp = require('./lib/sources/omp');
 const { startCodexLog } = require('./lib/sources/codex-log');
 const { startLimits } = require('./lib/limits');
+const { startDemo } = require('./lib/demo');
 
 const dashboardCss = fs.readFileSync(path.join(__dirname, 'dashboard.css'), 'utf8');
 function parseArgs(argv) {
@@ -33,10 +34,49 @@ function parseArgs(argv) {
   return out;
 }
 
-function start({ port, home, only = '', timers = true, noLimits = false } = {}) {
+function start({ port, home, only = '', timers = true, noLimits = false, now = Date.now, demoIdleMs = 60e3 } = {}) {
   const resolvedPort = port ?? (process.env.MESH_PORT ? Number(process.env.MESH_PORT) : 4777);
   const resolvedHome = home || os.homedir();
   const board = createBoard({});
+  let demoBoard = createBoard({ now });
+  let demo = null;
+  let demoSeed = 0;
+  let demoLast = 0;
+  let demoIdle = null;
+  function stopDemo() {
+    if (demo) {
+      try {
+        demo.dispose();
+      } catch {
+        // Ignore dispose errors.
+      }
+    }
+    demo = null;
+    clearTimeout(demoIdle);
+    demoIdle = null;
+  }
+  function armDemoIdle() {
+    clearTimeout(demoIdle);
+    demoIdle = null;
+    if (!timers) return;
+    demoIdle = setTimeout(() => stopDemo(), demoIdleMs);
+    demoIdle.unref?.();
+  }
+  function checkDemoIdle() {
+    if (demo && now() - demoLast > demoIdleMs) stopDemo();
+  }
+  function ensureDemo() {
+    checkDemoIdle();
+    if (!demo) {
+      demoBoard = createBoard({ now });
+      demoSeed += 1;
+      demo = startDemo({ board: demoBoard, now, timers, seed: demoSeed });
+      demo.step(0);
+    }
+    demoLast = now();
+    armDemoIdle();
+    return demo;
+  }
   const sources = [claude, codex, omp];
   const tails = sources.map(source => {
     const ctx = { board, now: Date.now, only: only || '' };
@@ -52,9 +92,14 @@ function start({ port, home, only = '', timers = true, noLimits = false } = {}) 
   const codexLog = startCodexLog({ board, home: resolvedHome, only: only || '', timers });
   const limits = noLimits ? { refresh: async () => {}, dispose() {} } : startLimits({ board, home: resolvedHome, timers });
   const server = http.createServer((request, response) => {
-    const urlPath = (request.url || '/').split('?')[0];
+    const parsed = new URL(request.url || '/', 'http://127.0.0.1');
+    const urlPath = parsed.pathname;
     if (urlPath === '/state') {
-      const snapshot = board.snapshot();
+      const wantDemo = parsed.searchParams.get('demo') === '1';
+      if (wantDemo) ensureDemo();
+      else checkDemoIdle();
+      const snapshot = (wantDemo ? demoBoard : board).snapshot();
+      if (wantDemo) snapshot.demo = true;
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       response.end(JSON.stringify({ state: snapshot, svg: drawMap(snapshot, Date.now()) }));
       return;
@@ -115,6 +160,7 @@ function start({ port, home, only = '', timers = true, noLimits = false } = {}) 
 
   function close() {
     return new Promise(resolve => {
+      stopDemo();
       for (const { tail } of tails) {
         try {
           tail.dispose();
@@ -141,7 +187,7 @@ function start({ port, home, only = '', timers = true, noLimits = false } = {}) 
     });
   }
 
-  return { server, board, tails, codexLog, limits, get port() { return actualPort; }, ready, close };
+  return { server, board, tails, codexLog, limits, get demo() { return demo; }, get port() { return actualPort; }, ready, close };
 }
 
 if (require.main === module) {
