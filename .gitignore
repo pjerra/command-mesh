@@ -6,9 +6,6 @@
 lot-map-preview.png
 command-mesh-preview.png
 *.vsix
-.kiro/lot-map/state.json*
-.kiro/command-mesh/state.json*
-.kiro/command-mesh/bridge.lock
 .vscode/settings.json
 .notes/
 node_modules/

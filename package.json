@@ -1,43 +1,20 @@
 {
   "name": "command-mesh",
-  "displayName": "Command Mesh",
-  "description": "Live visual telemetry for Codex, Copilot, Kiro, and other coding agents.",
-  "version": "0.1.0",
-  "publisher": "local",
-  "author": "Deemer15",
+  "version": "0.2.0",
+  "description": "Standalone local web dashboard showing Claude, Codex, and omp agent activity as an animated grid.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Deemer15/command-mesh.git"
+    "url": "https://github.com/pjerra/command-mesh.git"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "node": ">=20"
   },
-  "main": "./extension.js",
+  "bin": {
+    "command-mesh": "mesh.js"
+  },
   "scripts": {
-    "harness": "node test/harness.js",
-    "test": "node test/harness.js --fast"
-  },
-  "activationEvents": [
-    "*"
-  ],
-  "contributes": {
-    "commands": [
-      {
-        "command": "commandMesh.open",
-        "title": "Command Mesh: Open Activity Grid"
-      },
-      {
-        "command": "commandMesh.openWeb",
-        "title": "Command Mesh: Open Web Dashboard"
-      }
-    ],
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "commandMesh.open"
-        }
-      ]
-    }
+    "start": "node mesh.js",
+    "test": "node --test test/"
   }
 }
