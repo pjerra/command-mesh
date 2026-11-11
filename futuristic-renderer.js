@@ -152,7 +152,7 @@ function drawMap(board, now) {
     if (ompUsage && !offline) {
       const usageAge = now - (Number(ompUsage.lastAt) || 0)
       const fresh = usageAge >= 0 && usageAge < 2600
-      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+${Number(ompUsage.last || 0).toFixed(3)}</text>`
+      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+$${Number(ompUsage.last || 0).toFixed(3)}</text>`
     }
     body += `<title>${provider.label} · ${offline ? 'offline' : running ? running + ' active' : 'idle'} · ${esc(model)}</title></g>`
   })
