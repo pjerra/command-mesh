@@ -2,24 +2,24 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const stations = ['you','model','memory','files','shell','web','browser','agents','skills','hooks']
 const names = ['Operator','Model','Memory','Files','Terminal','Network','Browser','Agents','Skills','Hooks']
 // One color per agent, used everywhere that agent shows up: cores, cards, routes, packets, ticker.
-const PROVIDERS = ['copilot','codex','kiro']
-const COLORS = { copilot: '#53f4dd', codex: '#a28aff', kiro: '#ffb86b' }
+const PROVIDERS = ['claude','codex','omp']
+const COLORS = { claude: '#ff9d6b', codex: '#a28aff', omp: '#53f4dd' }
 const RED = '#ff728f', IDLE = '#506b85', OFF = '#2b3d4e'
 // Labels that mean an agent finished a turn. They trigger the shockwave on that agent's core.
-const TURN_END = /answer ready|task_complete|codex working|turn complete/i
+const TURN_END = / working$|answer ready|turn complete/i
 const normalizeProvider = value => {
   const provider = String(value || '').toLowerCase()
-  if (provider.includes('copilot')) return 'copilot'
+  if (provider.includes('claude')) return 'claude'
   if (provider.includes('codex') || provider.includes('chatgpt')) return 'codex'
-  if (provider.includes('kiro')) return 'kiro'
+  if (provider.includes('omp')) return 'omp'
   return ''
 }
 const providerFor = entry => {
   const explicit = normalizeProvider(entry.provider)
   if (explicit) return explicit
   if (String(entry.id || '').startsWith('codex-') || /codex|chatgpt/i.test(String(entry.detail?.kind || ''))) return 'codex'
-  if (/kiro/i.test(String(entry.detail?.kind || ''))) return 'kiro'
-  return 'copilot'
+  if (String(entry.id || '').startsWith('omp-')) return 'omp'
+  return 'claude'
 }
 const hexPath = (x, y, radius) => Array.from({ length: 6 }, (_, index) => {
   const angle = Math.PI / 3 * index - Math.PI / 2
@@ -42,10 +42,10 @@ function presenceOf(board, provider, entries, now) {
   return presence[provider] ? 'present' : 'offline'
 }
 
-function drawMap(board, now, setup) {
+function drawMap(board, now) {
   const entries = board.entries || []
   const active = entries.filter(e => e.status === 'run')
-  const cyan = COLORS.copilot, violet = COLORS.codex
+  const cyan = COLORS.omp, violet = COLORS.codex
   let body = `<style>@keyframes orbit{to{transform:rotate(360deg)}}@keyframes reactor{50%{opacity:.35}}@keyframes corePulse{50%{opacity:.35;transform:scale(1.12)}}@keyframes stream{to{stroke-dashoffset:-48}}@keyframes nodePulse{50%{opacity:.8}}.stream{animation:stream 1.2s linear infinite;animation-delay:-${(now%1200)/1000}s}.node-pulse{animation:nodePulse 2s ease-in-out infinite;animation-delay:-${(now%2000)/1000}s}.provider-pulse{transform-box:fill-box;transform-origin:center;animation:corePulse 1.8s ease-in-out infinite;animation-delay:-${(now%1800)/1000}s}.sweep{animation-duration:18s;animation-delay:-${(now%18000)/1000}s}.inner-orbit{animation-duration:9s;animation-delay:-${(now%9000)/1000}s}.orbit{transform-origin:450px 285px;animation:orbit 24s linear infinite;animation-delay:-${(now%24000)/1000}s}.counter{animation-direction:reverse;animation-duration:36s;animation-delay:-${(now%36000)/1000}s}.reactor{animation:reactor 2.4s ease-in-out infinite;animation-delay:-${(now%2400)/1000}s}`
     + `@keyframes breathe{0%,100%{opacity:.03}50%{opacity:.15}}.breathe{animation:breathe 4.8s ease-in-out infinite}`
     + `@keyframes shock{0%{transform:scale(.6);opacity:.95;stroke-width:3.5}100%{transform:scale(3.2);opacity:0;stroke-width:.3}}.shock{transform-box:fill-box;transform-origin:center;animation:shock 1.5s cubic-bezier(.15,.7,.3,1) both}`
@@ -110,9 +110,9 @@ function drawMap(board, now, setup) {
   })
 
   const providers = [
-    { id: 'copilot', label: 'COPILOT', x: 394, y: 238, color: COLORS.copilot },
+    { id: 'claude', label: 'CLAUDE', x: 394, y: 238, color: COLORS.claude },
     { id: 'codex', label: 'CODEX', x: 506, y: 238, color: COLORS.codex },
-    { id: 'kiro', label: 'KIRO', x: 450, y: 342, color: COLORS.kiro },
+    { id: 'omp', label: 'OMP', x: 450, y: 342, color: COLORS.omp },
   ]
   body += `<circle cx="450" cy="285" r="112" fill="#081522" stroke="#294256" stroke-width="1.5"/><circle cx="450" cy="285" r="106" fill="none" stroke="#183548" stroke-dasharray="2 8"/><path d="M394 238L506 238L450 342Z" fill="none" stroke="#29485c" stroke-width="1.2" stroke-dasharray="3 6"/><circle cx="450" cy="278" r="7" fill="#112d3b" stroke="#53f4dd" opacity=".8"/>`
   providers.forEach((provider, k) => {
@@ -142,14 +142,17 @@ function drawMap(board, now, setup) {
     } else {
       body += `<path d="${hexPath(x, y, 34)}" fill="#0b1a27" stroke="${lit ? color : '#385267'}" stroke-width="${lit ? 2.4 : 1.4}"/><path d="${hexPath(x, y, 23)}" fill="${color}" fill-opacity="${lit ? '.28' : '.09'}" stroke="${color}" stroke-opacity="${lit ? '.8' : '.25'}"/><text x="${x}" y="${y + 5}" text-anchor="middle" fill="${lit ? '#efffff' : '#7890a7'}" font-size="13">${String(providerEntries.length).padStart(2,'0')}</text><circle cx="${x - 34}" cy="${y - 29}" r="3.5" fill="${running ? color : '#3c566a'}"/><text x="${x}" y="${y + 48}" text-anchor="middle" fill="${lit ? color : '#9bb0c4'}" font-size="11" letter-spacing="1.7">${provider.label}</text><rect x="${x - 50}" y="${y + 54}" width="100" height="17" rx="8.5" fill="#07111c" stroke="${color}" stroke-opacity="${lit ? '.45' : '.18'}"/><text x="${x}" y="${y + 65.5}" text-anchor="middle" fill="#9bb0c4" font-size="8.5">${esc(String(model).slice(0, 22))}</text>`
     }
-    // Kiro credits from Kiro's own session log: last turn and session total, plus a +N burst on each new turn.
-    const usage = provider.id === 'kiro' ? board.usage?.kiro : undefined
-    if (usage && !offline) {
-      const usageAge = now - (Number(usage.lastAt) || 0)
-      const fresh = usageAge >= 0 && usageAge < 2600
+    const sessionCount = board.sessions?.[provider.id] || 0
+    const ompUsage = provider.id === 'omp' ? board.usage?.omp : undefined
+    if (!offline && sessionCount > 0) {
+      const cost = ompUsage ? ' \u00b7 $' + Number(ompUsage.session || 0).toFixed(2) : ''
       body += `<rect x="${x - 96}" y="${y + 76}" width="192" height="11" rx="5.5" fill="#080e19" opacity=".9"/>`
-      body += `<text x="${x}" y="${y + 84}" text-anchor="middle" fill="${fresh ? color : '#7f93a8'}" font-size="8" letter-spacing="1">LAST ${credits(usage.last)} · SESSION ${credits(usage.session)} CR</text>`
-      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+${credits(usage.last)} CR</text>`
+      body += `<text x="${x}" y="${y + 84}" text-anchor="middle" fill="#7f93a8" font-size="8" letter-spacing="1">${sessionCount} SESSION${sessionCount === 1 ? '' : 'S'}${cost}</text>`
+    }
+    if (ompUsage && !offline) {
+      const usageAge = now - (Number(ompUsage.lastAt) || 0)
+      const fresh = usageAge >= 0 && usageAge < 2600
+      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+${Number(ompUsage.last || 0).toFixed(3)}</text>`
     }
     body += `<title>${provider.label} · ${offline ? 'offline' : running ? running + ' active' : 'idle'} · ${esc(model)}</title></g>`
   })
