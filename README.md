@@ -55,6 +55,10 @@ asks `codex app-server` over JSON-RPC (refresh 180 s; the read itself uses no qu
 times, plan names, and staleness the strip shows. The Claude row needs a status line that writes
 that cache file; without it the row stays hidden. `--no-limits` skips these readers.
 
+## Demo mode
+
+A LIVE | DEMO switch sits in a footer bar under the telemetry panel. DEMO replaces the board with a built-in fake session: three agents on made-up projects, a fake LIMITS strip whose windows slowly fill and wrap, and a DEMO tag next to the title. The live board keeps recording while the demo shows, so LIVE brings back the real activity with nothing lost. The demo reads no data from this machine and is safe for screenshots and recordings. The choice is remembered per browser in localStorage; there is no command line flag.
+
 ## Privacy
 
 What is stored: station, short label (tool name plus at most the last two path segments or the first word of a shell command), status, timestamps, counts, model name, session cost for omp, and whether each agent process is running. What is never stored: prompt text, tool arguments beyond the short label, tool output, or response text. The Codex live log reads turn ids, tool names, durations, cwd, and model from its SQLite rows; prompt text in that log is never read.

@@ -365,3 +365,69 @@ test('page: no limits in state renders no strip and no error', async () => {
   const dashboard = await runPage(state);
   assert.ok(!dashboard.includes('LIMITS'), 'no strip without limits');
 });
+
+// Fake child that records stdin completion and every signal it receives.
+function stoppingChild({ closeOnTerm = false } = {}) {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.signals = [];
+  child.stdinEnded = false;
+  child.stdin = {
+    write(line) {
+      let msg;
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        return;
+      }
+      if (msg.id === 1) {
+        setImmediate(() => child.stdout.emit('data', JSON.stringify({ id: 1, result: { platformOs: 'linux' } }) + '\n'));
+      } else if (msg.id === 2) {
+        setImmediate(() => child.stdout.emit('data', JSON.stringify({
+          id: 2,
+          result: { rateLimits: { primary: { usedPercent: 5, windowDurationMins: 300, resetsAt: 123 } } },
+        }) + '\n'));
+      }
+    },
+    end() { child.stdinEnded = true; },
+  };
+  child.kill = signal => {
+    child.signals.push(signal);
+    if (signal === 'SIGTERM' && closeOnTerm) setImmediate(() => child.emit('close', 0));
+    return true;
+  };
+  return child;
+}
+
+test('limits: codex stop ends stdin and sends SIGTERM, no SIGKILL when the child exits', async () => {
+  const child = stoppingChild({ closeOnTerm: true });
+  const outcome = await readCodexLimits(() => child, { graceMs: 25, version: '0.2.0' });
+  assert.ok(outcome.result, 'the answer is kept');
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.strictEqual(child.stdinEnded, true, 'stdin ended first');
+  assert.deepStrictEqual(child.signals, ['SIGTERM'], 'one polite signal, no SIGKILL');
+});
+
+test('limits: codex stop sends SIGKILL when the child ignores SIGTERM', async () => {
+  const child = stoppingChild({ closeOnTerm: false });
+  const outcome = await readCodexLimits(() => child, { graceMs: 25, version: '0.2.0' });
+  assert.ok(outcome.result, 'the answer is kept');
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.strictEqual(child.stdinEnded, true, 'stdin ended first');
+  assert.deepStrictEqual(child.signals, ['SIGTERM', 'SIGKILL'], 'graceful first, hard kill after the grace period');
+});
+
+test('limits: defaultRun closes stdin and sends SIGTERM before the child exits', async () => {
+  const { defaultRun } = require('../lib/limits');
+  const child = stoppingChild({ closeOnTerm: true });
+  const pending = defaultRun('omp', ['usage'], { spawnFn: () => child, input: 'ping', graceMs: 25 });
+  child.stdout.emit('data', 'answer');
+  child.emit('close', 0);
+  const result = await pending;
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.strictEqual(result.code, 0);
+  assert.strictEqual(result.stdout, 'answer');
+  assert.strictEqual(child.stdinEnded, true, 'stdin ended before the signal');
+  assert.deepStrictEqual(child.signals, ['SIGTERM'], 'no SIGKILL after a clean exit');
+});
