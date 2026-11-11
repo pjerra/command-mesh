@@ -38,13 +38,13 @@ function start({ port, home, only = '', timers = true } = {}) {
   const sources = [claude, codex, omp];
   const tails = sources.map(source => {
     const ctx = { board, now: Date.now, only: only || '' };
-    const tailRoot = source.root(resolvedHome);
+    const roots = () => (source.roots ? source.roots(resolvedHome) : [source.root(resolvedHome)]);
     const tail = startTail({
-      root: tailRoot,
+      roots,
       onEvent: (session, event) => source.handle(ctx, session, event),
       timers,
     });
-    return { source, tail, root: tailRoot, maxDepth: 5 };
+    return { source, tail, roots, root: source.root(resolvedHome), maxDepth: 5 };
   });
   const presence = timers ? startPresence({ board }) : { dispose() {} };
 
@@ -68,7 +68,7 @@ function start({ port, home, only = '', timers = true } = {}) {
   function countFiles(tail) {
     try {
       const found = [];
-      walkJsonl(tail.root, tail.maxDepth, found);
+      for (const dir of tail.roots()) walkJsonl(dir, tail.maxDepth, found);
       return found.length;
     } catch {
       return 0;
@@ -91,7 +91,8 @@ function start({ port, home, only = '', timers = true } = {}) {
       actualPort = typeof address === 'object' && address ? address.port : resolvedPort;
       console.log(`Command Mesh: http://127.0.0.1:${actualPort}/`);
       for (const entry of tails) {
-        console.log(`${entry.source.provider}: ${entry.root} (${countFiles(entry)} session files)`);
+        const folders = entry.roots().length;
+        console.log(`${entry.source.provider}: ${entry.root}${folders > 1 ? ` + ${folders - 1} profile folders` : ''} (${countFiles(entry)} session files)`);
       }
       resolve();
     });

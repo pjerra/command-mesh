@@ -42,3 +42,34 @@ test('tail: a file created after the first discover is read from the start', () 
   assert.deepStrictEqual(seen.map(e => e.b), [1, 2]);
   tail.dispose();
 });
+
+test('tail: roots given as a function are all walked, and a root that appears later is picked up', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-'));
+  const one = path.join(base, 'one');
+  const two = path.join(base, 'two');
+  fs.mkdirSync(one);
+  fs.writeFileSync(path.join(one, 'a.jsonl'), '');
+  const seen = [];
+  const roots = () => [one, two].filter(dir => fs.existsSync(dir));
+  const tail = startTail({ roots, onEvent: (s, e) => seen.push(e), timers: false });
+  tail.discover();
+  fs.appendFileSync(path.join(one, 'a.jsonl'), JSON.stringify({ c: 1 }) + '\n');
+  fs.mkdirSync(two);
+  fs.writeFileSync(path.join(two, 'b.jsonl'), JSON.stringify({ c: 2 }) + '\n');
+  tail.discover();
+  tail.poll();
+  assert.deepStrictEqual(seen.map(e => e.c).sort(), [1, 2]);
+  tail.dispose();
+});
+
+test('omp: roots cover the default session folder and every profile', () => {
+  const omp = require('../lib/sources/omp');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-'));
+  fs.mkdirSync(path.join(home, '.omp', 'profiles', 'go2', 'agent', 'sessions'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.omp', 'profiles', 'empty'), { recursive: true });
+  assert.deepStrictEqual(omp.roots(home), [
+    path.join(home, '.omp', 'agent', 'sessions'),
+    path.join(home, '.omp', 'profiles', 'empty', 'agent', 'sessions'),
+    path.join(home, '.omp', 'profiles', 'go2', 'agent', 'sessions'),
+  ]);
+});
