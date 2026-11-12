@@ -164,7 +164,7 @@ test('collector: lines without "usage" are never JSON-parsed', async () => {
   result.collector.close();
 });
 
-test('privacy: no prompt text from any log reaches the cache file or the ledger', async () => {
+test('privacy: no prompt text from any log reaches the cache file or /state', async () => {
   const { home, dir } = setupHome();
   const when = new Date(NOW - 60e3).toISOString();
   fs.writeFileSync(path.join(dir, 'secret.jsonl'), [
@@ -181,6 +181,18 @@ test('privacy: no prompt text from any log reaches the cache file or the ledger'
   assert.ok(!cache.includes('SECRET-TEXT'), 'the cache file holds counts only');
   collector.poll();
   assert.ok(!JSON.stringify(ledger.periods(NOW)).includes('SECRET-TEXT'), 'the periods sent to the page hold counts only');
+
+  const { start } = require('../mesh');
+  const handle = start({ port: 0, home, timers: false, noLimits: true, now: () => NOW });
+  await handle.ready;
+  await handle.collector.ready;
+  try {
+    const body = await (await fetch(`http://127.0.0.1:${handle.port}/state`)).text();
+    assert.ok(!body.includes('SECRET-TEXT'), 'no log text reaches /state');
+  } finally {
+    await handle.close();
+    handle.server.unref?.();
+  }
 });
 
 let DatabaseSync = null;
