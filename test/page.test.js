@@ -154,3 +154,56 @@ test('page: tabs switch the table, the Tokens and Est. cost KPIs and the request
   assert.ok(urls.some(url => url.includes('period=month')), 'the next request carries the chosen period');
   assert.ok(!monthly.includes('$5.00'), 'the old period numbers are gone from the KPIs');
 });
+
+test('page: range tabs switch the request and the header; click filters only in 30m', async () => {
+  const now = Date.now();
+  const bars = Array.from({ length: 30 }, (_, i) => ({
+    from: now - (30 - i) * 60e3,
+    to: now - (29 - i) * 60e3,
+    per: { claude: i === 0 || i === 29 ? 1 : 0, codex: 0, omp: 0 },
+    stations: { files: 1 },
+  }));
+  const state = {
+    entries: [
+      {
+        id: 'claude-you-old', provider: 'claude', station: 'you', label: 'older event', status: 'ok',
+        startedAt: now - 29.5 * 60e3, endedAt: now - 29.5 * 60e3, project: 'demo',
+      },
+      {
+        id: 'claude-you-new', provider: 'claude', station: 'you', label: 'fresh event', status: 'ok',
+        startedAt: now - 10e3, endedAt: now - 10e3, project: 'demo',
+      },
+    ],
+    counts: {},
+    models: {},
+    presence: {},
+    sessions: {},
+    usage: {},
+    activity: { range: '30m', bars },
+  };
+  const { dashboard, element, context, urls } = await renderDashboard(state);
+  assert.ok(urls[0].includes('range=30m'), 'the default request asks for 30m');
+  assert.ok(dashboard.includes('ACTIVITY \u00b7 LAST 30 MINUTES'), 'the header names the default range');
+  assert.ok(dashboard.includes('data-range="30m"') && dashboard.includes('data-range="24h"'), 'the four tabs exist');
+  assert.ok(dashboard.includes('data-bar="0"'), '30m bars carry the click index');
+  assert.ok(dashboard.includes('data-id="claude-you-old"') && dashboard.includes('data-id="claude-you-new"'), 'the feed starts with both events');
+
+  context.selectActivityBar(0);
+  const filtered = element.innerHTML;
+  assert.ok(filtered.includes('data-id="claude-you-old"'), 'the clicked minute keeps its event');
+  assert.ok(!filtered.includes('data-id="claude-you-new"'), 'the feed is limited to the clicked minute');
+  assert.ok(filtered.includes('CLICK AGAIN TO CLEAR'), 'the chart shows the active minute');
+
+  context.setActivityRange('2h');
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  const long = element.innerHTML;
+  assert.ok(urls.some(url => url.includes('range=2h')), 'the next request carries the chosen range');
+  assert.ok(long.includes('ACTIVITY \u00b7 LAST 2 HOURS'), 'the header follows the range');
+  assert.ok(!long.includes('data-bar='), 'longer ranges are not clickable');
+  assert.ok(long.includes('data-id="claude-you-old"') && long.includes('data-id="claude-you-new"'), 'the click filter is cleared');
+
+  context.selectActivityBar(0);
+  const unchanged = element.innerHTML;
+  assert.ok(unchanged.includes('data-id="claude-you-old"') && unchanged.includes('data-id="claude-you-new"'), 'a click in a long range does nothing');
+});
