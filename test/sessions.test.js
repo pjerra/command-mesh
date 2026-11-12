@@ -80,3 +80,26 @@ test('sessions: errors flag at 3 in 10 min; idle > 2 h is forgotten', () => {
   sessions.rows();
   assert.strictEqual(sessions.has('omp', 'sess-old'), false, 'a session idle over two hours is forgotten');
 });
+
+test('sessions: usage records map to session keys for Claude files and Codex rollouts', () => {
+  const t = 1_700_000_000_000;
+  const sessions = createSessions({ now: () => t });
+  sessions.note({
+    id: 'a', provider: 'claude', station: 'model', label: 'Claude working', status: 'ok',
+    startedAt: t - 5e3, endedAt: t - 5e3, project: 'demo',
+    detail: { kind: 'Claude turn', session: 'sess-a' },
+  });
+  sessions.cost({ provider: 'claude', file: '/home/user/.claude/projects/-home-user-demo/sess-a.jsonl', cost: 1.5, at: t - 60e3 });
+  sessions.cost({ provider: 'claude', file: '/home/user/.claude/projects/-home-user-demo/sess-a/subagents/agent-1.jsonl', cost: 0.5, at: t - 30e3 });
+  assert.strictEqual(sessions.rows()[0].costToday, 2, 'a subagent file is billed to its parent session');
+
+  const id = '019a0000-1111-7222-8333-444455556666';
+  sessions.cost({ provider: 'codex', file: `/home/user/.codex/sessions/2026/11/13/rollout-2026-11-13T12-00-00-${id}.jsonl`, cost: 3, at: t - 20e3 });
+  sessions.note({
+    id: 'b', provider: 'codex', station: 'model', label: 'Codex working', status: 'ok',
+    startedAt: t - 10e3, endedAt: t - 10e3, project: 'demo',
+    detail: { kind: 'Codex turn', session: id },
+  });
+  const codex = sessions.rows().find(row => row.provider === 'codex');
+  assert.strictEqual(codex.costToday, 3, 'a rollout named before the session appeared still maps');
+});
