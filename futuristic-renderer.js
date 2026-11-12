@@ -142,13 +142,16 @@ function drawMap(board, now, opts = {}) {
     } else {
       body += `<path d="${hexPath(x, y, 34)}" fill="#0b1a27" stroke="${lit ? color : '#385267'}" stroke-width="${lit ? 2.4 : 1.4}"/><path d="${hexPath(x, y, 23)}" fill="${color}" fill-opacity="${lit ? '.28' : '.09'}" stroke="${color}" stroke-opacity="${lit ? '.8' : '.25'}"/><text x="${x}" y="${y + 5}" text-anchor="middle" fill="${lit ? '#efffff' : '#7890a7'}" font-size="13">${String(providerEntries.length).padStart(2,'0')}</text><circle cx="${x - 34}" cy="${y - 29}" r="3.5" fill="${running ? color : '#3c566a'}"/><text x="${x}" y="${y + 48}" text-anchor="middle" fill="${lit ? color : '#9bb0c4'}" font-size="11" letter-spacing="1.7">${provider.label}${(board.sessions?.[provider.id] || 0) > 1 ? " ×" + board.sessions[provider.id] : ""}</text><rect x="${x - 50}" y="${y + 54}" width="100" height="17" rx="8.5" fill="#07111c" stroke="${color}" stroke-opacity="${lit ? '.45' : '.18'}"/><text x="${x}" y="${y + 65.5}" text-anchor="middle" fill="#9bb0c4" font-size="8.5">${esc(String(model).slice(0, 22))}</text>`
     }
-    const ompUsage = provider.id === 'omp' ? board.usage?.omp : undefined
-    if (ompUsage && !offline) {
+    const usage = board.usage?.[provider.id]
+    if (usage && !offline) {
+      const amount = `$${Number(usage.session || 0).toFixed(2)}`
+      // Claude and Codex costs are computed from token usage; Codex is rough, hence the tilde.
+      const line = provider.id === 'claude' ? `EST ${amount}` : provider.id === 'codex' ? `EST ~${amount}` : `COST ${amount}`
       body += `<rect x="${x - 96}" y="${y + 76}" width="192" height="11" rx="5.5" fill="#080e19" opacity=".9"/>`
-      body += `<text x="${x}" y="${y + 84}" text-anchor="middle" fill="#7f93a8" font-size="8" letter-spacing="1">SESSION COST $${Number(ompUsage.session || 0).toFixed(2)}</text>`
-      const usageAge = now - (Number(ompUsage.lastAt) || 0)
+      body += `<text x="${x}" y="${y + 84}" text-anchor="middle" fill="#7f93a8" font-size="8" letter-spacing="1">${line}</text>`
+      const usageAge = now - (Number(usage.lastAt) || 0)
       const fresh = usageAge >= 0 && usageAge < 2600
-      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+$${Number(ompUsage.last || 0).toFixed(3)}</text>`
+      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+$${Number(usage.last || 0).toFixed(3)}</text>`
     }
     body += `<title>${provider.label} · ${offline ? 'offline' : running ? running + ' active' : 'idle'} · ${esc(model)} · ${board.sessions?.[provider.id] || 0} sessions</title></g>`
   })
