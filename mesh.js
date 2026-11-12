@@ -6,6 +6,8 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const { createBoard } = require('./lib/board');
+const { createSessions } = require('./lib/sessions');
+const { createForecast } = require('./lib/forecast');
 const { startTail, walkJsonl } = require('./lib/tail');
 const { startPresence } = require('./lib/presence');
 const { page } = require('./lib/page');
@@ -48,7 +50,9 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
   const resolvedPort = port ?? (process.env.MESH_PORT ? Number(process.env.MESH_PORT) : 4777);
   const resolvedHome = home || os.homedir();
   const activity = createActivity({ now, file: activityFile({ home: resolvedHome, cacheFile }) });
-  const board = createBoard({ activity });
+  const sessions = createSessions({ now });
+  const forecast = createForecast({ now });
+  const board = createBoard({ activity, sessions, forecast });
   const ledger = createLedger({ now });
   const collector = noHistory ? null : startCollector({
     ledger,
@@ -56,6 +60,7 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     now,
     timers,
     cacheFile: cacheFile || undefined,
+    onRecord: record => sessions.cost(record),
   });
   if (collector) {
     console.log(`usage history: loading from ${collector.cacheFile}`);
@@ -66,7 +71,8 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     console.log('usage history: disabled (--no-history)');
   }
   let demoActivity = createActivity({ now });
-  let demoBoard = createBoard({ now, activity: demoActivity });
+  let demoSessions = createSessions({ now });
+  let demoBoard = createBoard({ now, activity: demoActivity, sessions: demoSessions });
   let demoLedger = null;
   let demo = null;
   let demoSeed = 0;
@@ -98,7 +104,8 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     checkDemoIdle();
     if (!demo) {
       demoActivity = createActivity({ now });
-      demoBoard = createBoard({ now, activity: demoActivity });
+      demoSessions = createSessions({ now });
+      demoBoard = createBoard({ now, activity: demoActivity, sessions: demoSessions });
       demoLedger = createLedger({ now });
       demoSeed += 1;
       demo = startDemo({ board: demoBoard, ledger: demoLedger, now, timers, seed: demoSeed });
@@ -137,6 +144,10 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
       const range = RANGES.includes(requestedRange) ? requestedRange : '30m';
       const activeActivity = wantDemo ? demoActivity : activity;
       const snapshot = (wantDemo ? demoBoard : board).snapshot();
+      const activeSessions = wantDemo ? demoSessions : sessions;
+      snapshot.sessionCounts = { ...snapshot.sessions };
+      snapshot.sessions = activeSessions.rows();
+      snapshot.errors = activeSessions.errors();
       const activeLedger = (wantDemo ? demoLedger : ledger) || ledger;
       const history = !collector || wantDemo ? { loading: false, progress: 1 } : collector.state();
       snapshot.usage = {
@@ -242,7 +253,7 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     });
   }
 
-  return { server, board, tails, codexLog, limits, ledger, collector, get demo() { return demo; }, get port() { return actualPort; }, ready, close };
+  return { server, board, sessions, tails, codexLog, limits, ledger, collector, get demo() { return demo; }, get port() { return actualPort; }, ready, close };
 }
 
 if (require.main === module) {
