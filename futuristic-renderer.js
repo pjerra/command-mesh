@@ -42,7 +42,7 @@ function presenceOf(board, provider, entries, now) {
   return presence[provider] ? 'present' : 'offline'
 }
 
-function drawMap(board, now) {
+function drawMap(board, now, opts = {}) {
   const entries = board.entries || []
   const active = entries.filter(e => e.status === 'run')
   const cyan = '#53f4dd', violet = '#a28aff'
@@ -154,35 +154,33 @@ function drawMap(board, now) {
   })
 
   body += `<text x="450" y="444" fill="#5c7891" font-size="8" letter-spacing="3" text-anchor="middle">MULTI-AGENT BUS${active.length ? ` · ${active.length} ACTIVE CHANNEL${active.length === 1 ? '' : 'S'}` : ''}</text>`
-  body += ticker(entries, active, now)
+  body += ticker(entries, active, now, opts.tickerKey)
   body += `<text x="26" y="548" fill="#506b85" font-size="9" letter-spacing="2">COMMAND MESH / OPERATIONS GRID</text><text x="874" y="548" fill="#506b85" font-size="9" text-anchor="end">${entries.length} EVENTS IN BUFFER</text></g>`
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 570" role="img" aria-label="Live agent activity topology">${body}</svg>`
 }
 
-// Terminal-style readout of the current operation. A running call types itself out once, with a
-// blinking cursor; a call that just finished stays on screen for 4 s in a dimmer tone.
-function ticker(entries, active, now) {
-  const focus = active.at(-1) || [...entries].reverse().find(e => e.endedAt && now - e.endedAt >= 0 && now - e.endedAt < 4000)
+// Terminal-style readout of the current operation. With several agents busy the newest call changes
+// every few hundred ms, too fast to read, so a line is held for TICKER_HOLD_MS before the next one
+// may replace it. The hold is kept per board (live and demo draw separately). The full text shows at
+// once: the SVG is rebuilt every refresh, which restarted a typing animation and could leave the line blank.
+const TICKER_HOLD_MS = 5000
+const tickerHolds = new Map()
+function ticker(entries, active, now, key = 'default') {
+  const wanted = active.at(-1) || [...entries].reverse().find(e => e.endedAt && now - e.endedAt >= 0 && now - e.endedAt < 8000)
+  const hold = tickerHolds.get(key)
+  let focus = wanted
+  if (hold && now - hold.since >= 0 && now - hold.since < TICKER_HOLD_MS) {
+    focus = entries.find(e => e.id === hold.id) || wanted
+  }
+  if (focus && (!hold || hold.id !== focus.id)) tickerHolds.set(key, { id: focus.id, since: now })
   if (!focus) return `<text x="450" y="468" fill="#849ab2" font-size="10" letter-spacing="3" text-anchor="middle">AWAITING INPUT</text>`
   const provider = providerFor(focus), color = COLORS[provider]
   const station = focus.station === 'network' ? 'web' : String(focus.station || '')
   const text = `> ${provider.toUpperCase()} :: ${station.toUpperCase()} :: ${String(focus.label || '').replace(/\s+/g, ' ')}`.slice(0, 64)
   const charWidth = 6.05, width = text.length * charWidth, x0 = 450 - width / 2
   const running = focus.status === 'run'
-  // Unique per render so two maps on one page never clip each other's ticker.
-  const clipId = `ticker-clip-${now.toString(36)}${Math.random().toString(36).slice(2, 7)}`
-  let out = `<clipPath id="${clipId}"><rect x="${(x0 - 2).toFixed(1)}" y="455" height="18" width="${running ? 0 : (width + 4).toFixed(1)}">`
-  let cursor = ''
-  if (running) {
-    const typed = Math.max(0, now - (focus.startedAt || now))
-    const steps = Array.from({ length: text.length + 1 }, (_, k) => k * charWidth)
-    const duration = (text.length * 0.028).toFixed(3), begin = `-${(typed / 1000).toFixed(3)}s`
-    out += `<animate attributeName="width" values="${steps.map(v => (v + 2).toFixed(1)).join(';')};${(width + 4).toFixed(1)}" dur="${duration}s" begin="${begin}" fill="freeze" calcMode="discrete"/>`
-    cursor = `<rect class="cursor" x="${x0.toFixed(1)}" y="459" width="6" height="11" fill="${color}" opacity=".85"><animate attributeName="x" values="${steps.map(v => (x0 + v + 1).toFixed(1)).join(';')}" dur="${duration}s" begin="${begin}" fill="freeze" calcMode="discrete"/></rect>`
-  }
-  out += `</rect></clipPath>`
-  out += `<text x="${x0.toFixed(1)}" y="468" fill="${color}" opacity="${running ? 1 : .7}" font-size="11" textLength="${width.toFixed(1)}" lengthAdjust="spacing" clip-path="url(#${clipId})">${esc(text)}</text>${cursor}`
-  return out
+  const cursor = running ? `<rect class="cursor" x="${(x0 + width + 3).toFixed(1)}" y="459" width="6" height="11" fill="${color}" opacity=".85"/>` : ''
+  return `<text x="${x0.toFixed(1)}" y="468" fill="${color}" opacity="${running ? 1 : .75}" font-size="11" textLength="${width.toFixed(1)}" lengthAdjust="spacing">${esc(text)}</text>${cursor}`
 }
 
 module.exports = drawMap

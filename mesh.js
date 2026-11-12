@@ -101,7 +101,7 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
       const snapshot = (wantDemo ? demoBoard : board).snapshot();
       if (wantDemo) snapshot.demo = true;
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-      response.end(JSON.stringify({ state: snapshot, svg: drawMap(snapshot, Date.now()) }));
+      response.end(JSON.stringify({ state: snapshot, svg: drawMap(snapshot, Date.now(), { tickerKey: wantDemo ? 'demo' : 'live' }) }));
       return;
     }
     if (urlPath === '/') {

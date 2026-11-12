@@ -36,3 +36,18 @@ test('renderer: core name shows session multiplier, no SESSIONS line', () => {
   assert.ok(svg.includes('CLAUDE ×2'), 'multi-session core named CLAUDE ×2');
   assert.ok(!svg.includes('SESSIONS'), 'no SESSIONS line');
 });
+
+test('renderer: a ticker line stays at least 5 s even when newer calls start, and shows its full text at once', () => {
+  const drawMap = require('../futuristic-renderer');
+  const key = 'ticker-test-' + Math.random();
+  const t0 = 1_700_000_000_000;
+  const one = { id: 'a', provider: 'claude', station: 'shell', label: 'Bash git', status: 'run', startedAt: t0 };
+  const two = { id: 'b', provider: 'omp', station: 'files', label: 'read src/app.ts', status: 'run', startedAt: t0 + 1000 };
+  const first = drawMap({ entries: [one] }, t0 + 100, { tickerKey: key });
+  assert.match(first, /CLAUDE :: SHELL :: Bash git/);
+  assert.doesNotMatch(first, /<animate attributeName="width"/, 'no typing animation that can leave the line blank');
+  const held = drawMap({ entries: [one, two] }, t0 + 3000, { tickerKey: key });
+  assert.match(held, /CLAUDE :: SHELL :: Bash git/, 'still the first line inside the hold time');
+  const next = drawMap({ entries: [{ ...one, status: 'ok', endedAt: t0 + 2000 }, two] }, t0 + 5200, { tickerKey: key });
+  assert.match(next, /OMP :: FILES :: read src\/app.ts/, 'switches after the hold time');
+});
