@@ -156,16 +156,7 @@ function drawMap(board, now, opts = {}) {
     const usage = periodPer ? periodPer[provider.id] : board.usage?.[provider.id]
     const hasUsage = usage && (periodPer ? (Number(usage.cost) || 0) > 0 || (Number(usage.tokens) || 0) > 0 : true)
     if (hasUsage && !offline) {
-      const cost = periodPer ? Number(usage.cost) || 0 : Number(usage.session) || 0
-      const amount = `$${cost.toFixed(2)}`
-      const tokens = periodPer ? ` · ${fmtTokens(usage.tokens)} tok` : ''
-      // Claude and Codex costs are computed from token usage; Codex is rough, hence the tilde.
-      const line = (provider.id === 'claude' ? `EST ${amount}` : provider.id === 'codex' ? `EST ~${amount}` : `COST ${amount}`) + tokens
-      // A pill sized to its text, in the agent's colour. The two top cores put it above the hexagon: below it the
-      // OMP core (drawn later) would cover the line. The bottom core keeps it under its model pill.
-      const pillW = Math.round(line.length * 6.2 + 16), pillY = provider.id === 'omp' ? y + 76 : provider.id === 'codex' ? y - 76 : y - 58
-      body += `<rect x="${(x - pillW / 2).toFixed(1)}" y="${pillY}" width="${pillW}" height="15" rx="7.5" fill="#07111c" stroke="${color}" stroke-opacity=".35"/>`
-      body += `<text x="${x}" y="${pillY + 11}" text-anchor="middle" fill="${color}" font-size="10" letter-spacing=".8">${line}</text>`
+      // Cost and tokens are shown in the USAGE panel; the core only pops +$ when new cost arrives.
       const last = history && history.lastAdd ? history.lastAdd[provider.id] : null
       const lastAt = last ? last.at : usage.lastAt
       const lastCost = last ? last.cost : usage.last

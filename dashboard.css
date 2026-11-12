@@ -117,3 +117,4 @@
 .fail-row b{color:#ff728f;font-weight:400}
 .fail-empty{color:#718aa6}
 @media(max-width:760px){.sess-body{flex-direction:column}.failing{min-width:0;max-width:none;border-left:0;border-top:1px solid #23354c;padding:8px 0 0;width:100%}.sess-cols,.srow{grid-template-columns:minmax(110px,1.4fr) 64px minmax(70px,1fr) minmax(90px,1.2fr) 48px 54px 42px;column-gap:6px}}
+.telemetry .telemetry-head{margin-top:14px;padding-top:12px;border-top:1px solid #1d2d40}
