@@ -47,7 +47,7 @@ test('server: /state carries usage.periods and the period param changes the core
       id,
       model: 'claude-opus-5-5',
       usage: { input_tokens: input, output_tokens: output, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
-      content: [],
+      content: [{ type: 'text', text: 'SECRET-TEXT reply text' }],
     },
   });
   fs.writeFileSync(path.join(dir, 'session.jsonl'), [
@@ -61,6 +61,7 @@ test('server: /state carries usage.periods and the period param changes the core
   try {
     const base = `http://127.0.0.1:${handle.port}`;
     const today = await (await fetch(base + '/state')).json();
+    assert.ok(!JSON.stringify(today).includes('SECRET-TEXT'), 'no reply text reaches /state');
     assert.ok(today.state.usage && today.state.usage.periods, 'usage.periods is on the state');
     for (const period of ['hour', 'today', 'week', 'month']) {
       assert.ok(today.state.usage.periods[period], `${period} period exists`);

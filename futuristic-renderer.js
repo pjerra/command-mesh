@@ -162,7 +162,7 @@ function drawMap(board, now, opts = {}) {
       const line = (provider.id === 'claude' ? `EST ${amount}` : provider.id === 'codex' ? `EST ~${amount}` : `COST ${amount}`) + tokens
       // A pill sized to its text, in the agent's colour. The two top cores put it above the hexagon: below it the
       // OMP core (drawn later) would cover the line. The bottom core keeps it under its model pill.
-      const pillW = Math.round(line.length * 6.2 + 16), pillY = provider.id === 'omp' ? y + 76 : y - 58
+      const pillW = Math.round(line.length * 6.2 + 16), pillY = provider.id === 'omp' ? y + 76 : provider.id === 'codex' ? y - 76 : y - 58
       body += `<rect x="${(x - pillW / 2).toFixed(1)}" y="${pillY}" width="${pillW}" height="15" rx="7.5" fill="#07111c" stroke="${color}" stroke-opacity=".35"/>`
       body += `<text x="${x}" y="${pillY + 11}" text-anchor="middle" fill="${color}" font-size="10" letter-spacing=".8">${line}</text>`
       const last = history && history.lastAdd ? history.lastAdd[provider.id] : null

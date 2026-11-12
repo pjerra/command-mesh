@@ -76,3 +76,4 @@
 .usage-chart .useg.codex{background:linear-gradient(#a28aff,#463a86)}
 .usage-chart .useg.omp{background:linear-gradient(#53f4dd,#1d6a6e)}
 @media(max-width:900px){.usage-when{margin-left:0;width:100%;text-align:left}}
+@media(max-width:1050px) and (min-width:601px){.kpis{grid-template-columns:repeat(5,minmax(0,1fr))}}
