@@ -82,3 +82,26 @@ test('server: /state carries usage.periods and the period param changes the core
     handle.server.unref?.();
   }
 });
+
+test('server: /state?range=8h returns 32 bars; the default is 30m', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-activity-server-'));
+  const handle = start({ port: 0, home, timers: false, noLimits: true, noHistory: true });
+  await handle.ready;
+  try {
+    const base = `http://127.0.0.1:${handle.port}`;
+    const eight = await (await fetch(base + '/state?range=8h')).json();
+    assert.strictEqual(eight.state.activity.range, '8h');
+    assert.strictEqual(eight.state.activity.bars.length, 32);
+    const from = eight.state.activity.bars[0].from;
+    const to = eight.state.activity.bars[31].to;
+    assert.strictEqual(to - from, 32 * 15 * 60e3);
+    const def = await (await fetch(base + '/state')).json();
+    assert.strictEqual(def.state.activity.range, '30m');
+    assert.strictEqual(def.state.activity.bars.length, 30);
+    const bad = await (await fetch(base + '/state?range=nope')).json();
+    assert.strictEqual(bad.state.activity.range, '30m');
+  } finally {
+    await handle.close();
+    handle.server.unref?.();
+  }
+});

@@ -18,8 +18,11 @@ const { startLimits } = require('./lib/limits');
 const { startDemo } = require('./lib/demo');
 const { createLedger } = require('./lib/usage/ledger');
 const { startCollector } = require('./lib/usage/collector');
+const { createActivity, activityFile } = require('./lib/activity');
 
 const PERIODS = ['hour', 'today', 'week', 'month'];
+const RANGES = ['30m', '2h', '8h', '24h'];
+const ACTIVITY_SAVE_MS = 60e3;
 
 const dashboardCss = fs.readFileSync(path.join(__dirname, 'dashboard.css'), 'utf8');
 function parseArgs(argv) {
@@ -44,7 +47,8 @@ function parseArgs(argv) {
 function start({ port, home, only = '', timers = true, noLimits = false, now = Date.now, demoIdleMs = 60e3, noHistory = false, cacheFile = null } = {}) {
   const resolvedPort = port ?? (process.env.MESH_PORT ? Number(process.env.MESH_PORT) : 4777);
   const resolvedHome = home || os.homedir();
-  const board = createBoard({});
+  const activity = createActivity({ now, file: activityFile({ home: resolvedHome, cacheFile }) });
+  const board = createBoard({ activity });
   const ledger = createLedger({ now });
   const collector = noHistory ? null : startCollector({
     ledger,
@@ -61,7 +65,8 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
   } else {
     console.log('usage history: disabled (--no-history)');
   }
-  let demoBoard = createBoard({ now });
+  let demoActivity = createActivity({ now });
+  let demoBoard = createBoard({ now, activity: demoActivity });
   let demoLedger = null;
   let demo = null;
   let demoSeed = 0;
@@ -92,7 +97,8 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
   function ensureDemo() {
     checkDemoIdle();
     if (!demo) {
-      demoBoard = createBoard({ now });
+      demoActivity = createActivity({ now });
+      demoBoard = createBoard({ now, activity: demoActivity });
       demoLedger = createLedger({ now });
       demoSeed += 1;
       demo = startDemo({ board: demoBoard, ledger: demoLedger, now, timers, seed: demoSeed });
@@ -113,6 +119,8 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     });
     return { source, tail, roots, root: source.root(resolvedHome), maxDepth: 5 };
   });
+  const activityTimer = timers ? setInterval(() => activity.save(false), ACTIVITY_SAVE_MS) : null;
+  activityTimer?.unref?.();
   const presence = timers ? startPresence({ board }) : { dispose() {} };
   const codexLog = startCodexLog({ board, home: resolvedHome, only: only || '', timers });
   const limits = noLimits ? { refresh: async () => {}, dispose() {} } : startLimits({ board, home: resolvedHome, timers });
@@ -125,6 +133,9 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
       else checkDemoIdle();
       const requested = parsed.searchParams.get('period');
       const period = PERIODS.includes(requested) ? requested : 'today';
+      const requestedRange = parsed.searchParams.get('range');
+      const range = RANGES.includes(requestedRange) ? requestedRange : '30m';
+      const activeActivity = wantDemo ? demoActivity : activity;
       const snapshot = (wantDemo ? demoBoard : board).snapshot();
       const activeLedger = (wantDemo ? demoLedger : ledger) || ledger;
       const history = !collector || wantDemo ? { loading: false, progress: 1 } : collector.state();
@@ -135,6 +146,7 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
         period,
         lastAdd: activeLedger.lastAdd,
       };
+      snapshot.activity = { range, bars: activeActivity.bars(range, now()) };
       if (wantDemo) snapshot.demo = true;
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       response.end(JSON.stringify({ state: snapshot, svg: drawMap(snapshot, Date.now(), { tickerKey: wantDemo ? 'demo' : 'live' }) }));
@@ -224,6 +236,8 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
       } catch {
         // Ignore cache write errors.
       }
+      clearInterval(activityTimer);
+      activity.close();
       server.close(() => resolve());
     });
   }
