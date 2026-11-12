@@ -182,3 +182,42 @@ test('privacy: no prompt text from any log reaches the cache file or the ledger'
   collector.poll();
   assert.ok(!JSON.stringify(ledger.periods(NOW)).includes('SECRET-TEXT'), 'the periods sent to the page hold counts only');
 });
+
+let DatabaseSync = null;
+try {
+  DatabaseSync = require('node:sqlite').DatabaseSync;
+} catch {
+  DatabaseSync = null;
+}
+
+(DatabaseSync ? test : test.skip)('collector: the codex log reader returns usage rows, not the rows in between', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-usage-sqlite-'));
+  const dbPath = path.join(home, 'logs_1.sqlite');
+  const db = new DatabaseSync(dbPath);
+  db.exec('CREATE TABLE logs(id INTEGER PRIMARY KEY, ts INTEGER, target TEXT, feedback_log_body TEXT, thread_id TEXT)');
+  const insert = db.prepare('INSERT INTO logs(id, ts, target, feedback_log_body, thread_id) VALUES (?, ?, ?, ?, ?)');
+  const ts = Math.floor(NOW / 1000);
+  db.exec('BEGIN');
+  for (let id = 1; id <= 9000; id++) insert.run(id, ts, 'codex_core::other', 'nothing to see', 'thread-x');
+  insert.run(9001, ts, 'codex_core::session::turn', 'turn: post sampling token usage total_usage_tokens=1000', 'thread-1');
+  for (let id = 9002; id <= 10000; id++) insert.run(id, ts, 'codex_core::other', 'nothing to see', 'thread-x');
+  db.exec('COMMIT');
+  db.close();
+
+  const ledger = createLedger({ now: () => NOW });
+  const collector = startCollector({
+    ledger,
+    home,
+    now: () => NOW,
+    timers: false,
+    cacheFile: path.join(home, 'cache.json'),
+    codexDbPath: dbPath,
+  });
+  await collector.ready;
+  const codex = ledger.periods(NOW).today.per.codex;
+  assert.strictEqual(codex.rough, true);
+  assert.ok(Math.abs(codex.cost - 1000 * 1.25 / 1e6) < 1e-12, 'the one usage row is priced');
+  collector.poll();
+  assert.ok(Math.abs(ledger.periods(NOW).today.per.codex.cost - 1000 * 1.25 / 1e6) < 1e-12, 'the cursor skips the scanned rows');
+  collector.close();
+});
