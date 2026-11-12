@@ -202,3 +202,81 @@ test('privacy: a prompt text and a bash command argument never appear in JSON.st
   assert.ok(!json2.includes('sk-secret-123'), 'assignment value leaked');
   assert.strictEqual(ctx.board.snapshot().entries.find(e => e.id === 'claude-tool-tq').label, 'Bash curl');
 });
+
+const near = (actual, expected, label) => assert.ok(
+  Math.abs(actual - expected) < 1e-12,
+  `${label}: expected ${expected}, got ${actual}`,
+);
+
+test('claude: one reply split over three lines is costed once', () => {
+  const ctx = ctxFor();
+  const s = sess();
+  s.cwd = '/home/user/demo';
+  const line = uuid => ({
+    type: 'assistant', uuid, sessionId: 's1', timestamp: new Date(NOW).toISOString(),
+    message: {
+      id: 'msg_once', model: 'claude-opus-5-5', stop_reason: null,
+      usage: { input_tokens: 1000, output_tokens: 2000 },
+      content: [{ type: 'text', text: 'one block of a reply' }],
+    },
+  });
+  claude.handle(ctx, s, line('a1'));
+  claude.handle(ctx, s, line('a2'));
+  claude.handle(ctx, s, line('a3'));
+  assert.strictEqual(entries(ctx).length, 0, 'text-only assistant lines add no entries');
+  near(ctx.board.snapshot().usage.claude.session, 0.044, 'three lines of one message costed once');
+});
+
+test('claude: cache_creation split prices 5m and 1h differently; missing split prices all as 5m', () => {
+  const split = ctxFor();
+  const s1 = sess('/x/one.jsonl');
+  s1.cwd = '/home/user/demo';
+  claude.handle(split, s1, {
+    type: 'assistant', uuid: 'b1', sessionId: 's1', timestamp: new Date(NOW).toISOString(),
+    message: {
+      id: 'msg_split', model: 'claude-opus-5-5', stop_reason: null,
+      usage: {
+        cache_creation_input_tokens: 1_000_000,
+        cache_creation: { ephemeral_5m_input_tokens: 400_000, ephemeral_1h_input_tokens: 600_000 },
+      },
+      content: [],
+    },
+  });
+  near(split.board.snapshot().usage.claude.session, 6.8, '400k at 5m + 600k at 1h');
+
+  const flat = ctxFor();
+  const s2 = sess('/x/two.jsonl');
+  s2.cwd = '/home/user/demo';
+  claude.handle(flat, s2, {
+    type: 'assistant', uuid: 'b2', sessionId: 's2', timestamp: new Date(NOW).toISOString(),
+    message: {
+      id: 'msg_flat', model: 'claude-opus-5-5', stop_reason: null,
+      usage: { cache_creation_input_tokens: 1_000_000 },
+      content: [],
+    },
+  });
+  near(flat.board.snapshot().usage.claude.session, 5, 'missing split prices every write as 5m');
+});
+
+test('codex: token_count prices last_token_usage exactly', () => {
+  const ctx = ctxFor();
+  const s = sess();
+  s.cwd = '/home/user/demo';
+  codex.handle(ctx, s, {
+    type: 'event_msg', timestamp: new Date(NOW).toISOString(),
+    payload: {
+      type: 'token_count', turn_id: 'T-cost',
+      info: {
+        last_token_usage: {
+          input_tokens: 1_000_000, cached_input_tokens: 200_000, output_tokens: 100_000,
+        },
+      },
+    },
+  });
+  const usage = ctx.board.snapshot().usage.codex;
+  // Codex counts the cached tokens inside input_tokens, so only 800k are billed as uncached:
+  // 800k*1.25 + 200k*0.125 + 100k*10, per 1M.
+  near(usage.session, 2.025, 'token_count cost');
+  assert.strictEqual(usage.rough, undefined, 'the rollout cost is exact, not rough');
+  assert.strictEqual(ctx.board.isCosted('codex', 'T-cost'), true, 'the turn is marked as priced');
+});

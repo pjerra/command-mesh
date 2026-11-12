@@ -76,3 +76,19 @@ test('board: setModel cleans, addCost sums and ignores junk, finish patches labe
   assert.strictEqual(w.label, 'done thing');
   assert.strictEqual(board.finish('missing', 'ok', 6_000), false);
 });
+
+test('board: markCosted is per provider and capped, a rough estimate stays rough', () => {
+  const board = createBoard({ now: () => 7_000 });
+  assert.strictEqual(board.isCosted('codex', 't1'), false);
+  board.markCosted('codex', 't1');
+  assert.strictEqual(board.isCosted('codex', 't1'), true);
+  assert.strictEqual(board.isCosted('claude', 't1'), false, 'providers do not share the set');
+  board.addCost('codex', 0.5, { rough: true });
+  board.addCost('codex', 0.25);
+  const usage = board.snapshot().usage.codex;
+  assert.strictEqual(usage.rough, true, 'a mixed total is still an estimate');
+  assert.strictEqual(usage.session, 0.75);
+  for (let i = 0; i < 10_001; i++) board.markCosted('omp', `id-${i}`);
+  assert.strictEqual(board.isCosted('omp', 'id-0'), false, 'the oldest id is dropped at the cap');
+  assert.strictEqual(board.isCosted('omp', 'id-10000'), true);
+});
