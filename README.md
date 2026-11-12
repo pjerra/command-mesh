@@ -95,7 +95,7 @@ What is stored: station, short label (tool name plus at most the last two path s
 
 ## Reading the grid
 
-Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under each core that has cost, a line shows the selected USAGE period: `EST $1.23 · 18.4M tok` for Claude, `EST ~$0.40 · 8.1M tok` for Codex, `COST $0.12 · 31.0M tok` for omp. A new cost also floats up as `+$0.003`.
+Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under each core that has cost, a line shows the selected USAGE period: `EST $1.23 · 18.4M tok` for Claude, `EST ~$0.40 · 8.1M tok` for Codex, `COST $0.12 · 31.0M tok` for omp. A new cost also floats up as `+$0.003`. A lit Memory station means Claude loaded memory into a session's starting context, or reloaded it after compaction.
 
 ## Tests
 
