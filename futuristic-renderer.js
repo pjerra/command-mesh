@@ -147,8 +147,11 @@ function drawMap(board, now, opts = {}) {
       const amount = `$${Number(usage.session || 0).toFixed(2)}`
       // Claude and Codex costs are computed from token usage; Codex is rough, hence the tilde.
       const line = provider.id === 'claude' ? `EST ${amount}` : provider.id === 'codex' ? `EST ~${amount}` : `COST ${amount}`
-      body += `<rect x="${x - 96}" y="${y + 76}" width="192" height="11" rx="5.5" fill="#080e19" opacity=".9"/>`
-      body += `<text x="${x}" y="${y + 84}" text-anchor="middle" fill="#7f93a8" font-size="8" letter-spacing="1">${line}</text>`
+      // A pill sized to its text, in the agent's colour. The two top cores put it above the hexagon: below it the
+      // OMP core (drawn later) would cover the line. The bottom core keeps it under its model pill.
+      const pillW = Math.round(line.length * 6.2 + 16), pillY = provider.id === 'omp' ? y + 76 : y - 58
+      body += `<rect x="${(x - pillW / 2).toFixed(1)}" y="${pillY}" width="${pillW}" height="15" rx="7.5" fill="#07111c" stroke="${color}" stroke-opacity=".35"/>`
+      body += `<text x="${x}" y="${pillY + 11}" text-anchor="middle" fill="${color}" font-size="10" letter-spacing=".8">${line}</text>`
       const usageAge = now - (Number(usage.lastAt) || 0)
       const fresh = usageAge >= 0 && usageAge < 2600
       if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+$${Number(usage.last || 0).toFixed(3)}</text>`
