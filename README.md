@@ -59,13 +59,31 @@ that cache file; without it the row stays hidden. `--no-limits` skips these read
 
 A LIVE | DEMO switch sits in a footer bar under the telemetry panel. DEMO replaces the board with a built-in fake session: three agents on made-up projects, a fake LIMITS strip whose windows slowly fill and wrap, and a DEMO tag next to the title. The live board keeps recording while the demo shows, so LIVE brings back the real activity with nothing lost. The demo reads no data from this machine and is safe for screenshots and recordings. The choice is remembered per browser in localStorage; there is no command line flag.
 
+## Costs
+
+`Est. cost` in the KPI row sums the three agents, counted since the dashboard started (the board
+lives in memory, so a restart starts over). Hover it to see each agent's share. The same numbers
+are drawn under the cores: `EST $1.23` (Claude), `EST ~$0.40` (Codex), `COST $0.12` (omp).
+
+| Agent | Source | How exact |
+| --- | --- | --- |
+| Claude | `message.usage` on assistant lines | Exact: input, output, cache read, 5m cache write and 1h cache write are priced separately. One reply spans several lines with the same usage, so it is counted once by message id. |
+| Codex | rollout `token_count` events, or the live log | Rollout costs use the reported tokens and are exact for those tokens. The live log has no token counts, so each model call is estimated from the growth of `total_usage_tokens`; that is what the `~` marks. |
+| omp | `message.usage.cost.total` | Exact: the CLI reports its own dollar cost. |
+
+When both Codex readers see the same turn, only the rollout counts. Prices are USD per 1M tokens
+in `lib/prices.js`; edit that file when they change. Claude entries match the longest model id
+prefix, and an unknown model adds no cost. The Codex table has one `codex-default` entry holding
+GPT-5 list prices, used whatever model Codex runs. A cache write without a 5m/1h split is priced
+as five minutes.
+
 ## Privacy
 
-What is stored: station, short label (tool name plus at most the last two path segments or the first word of a shell command), status, timestamps, counts, model name, session cost for omp, and whether each agent process is running. What is never stored: prompt text, tool arguments beyond the short label, tool output, or response text. The Codex live log reads turn ids, tool names, durations, cwd, and model from its SQLite rows; prompt text in that log is never read.
+What is stored: station, short label (tool name plus at most the last two path segments or the first word of a shell command), status, timestamps, counts, model name, token and dollar cost totals per agent, and whether each agent process is running. What is never stored: prompt text, tool arguments beyond the short label, tool output, or response text. The Codex live log reads turn ids, tool names, durations, cwd, and model from its SQLite rows; prompt text in that log is never read.
 
 ## Reading the grid
 
-Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under OMP the grid shows the cost in dollars since the dashboard started.
+Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under each core that has cost, a line shows it since the dashboard started: `EST $1.23` for Claude, `EST ~$0.40` for Codex, `COST $0.12` for omp. A new cost also floats up as `+$0.003`.
 
 ## Tests
 
