@@ -159,28 +159,43 @@ function drawMap(board, now, opts = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 570" role="img" aria-label="Live agent activity topology">${body}</svg>`
 }
 
-// Terminal-style readout of the current operation. With several agents busy the newest call changes
-// every few hundred ms, too fast to read, so a line is held for TICKER_HOLD_MS before the next one
-// may replace it. The hold is kept per board (live and demo draw separately). The full text shows at
-// once: the SVG is rebuilt every refresh, which restarted a typing animation and could leave the line blank.
-const TICKER_HOLD_MS = 5000
+// Terminal-style readout of the current operation. Each line types itself out slowly (TICKER_CHAR_MS per
+// character), then stays readable for TICKER_READ_MS before a newer call may replace it; with nothing new it
+// stays up to TICKER_LINGER_MS after the call ended. The SVG is rebuilt on every refresh, so the typing is a
+// per-character CSS animation with a negative delay (the time already shown): every rebuild resumes it exactly
+// where the last one was, instead of restarting it. Holds are kept per board (live and demo draw separately).
+const TICKER_CHAR_MS = 55, TICKER_READ_MS = 6000, TICKER_LINGER_MS = 12000
 const tickerHolds = new Map()
+function tickerHoldMs(text) { return text.length * TICKER_CHAR_MS + TICKER_READ_MS }
+function tickerText(entry) {
+  const provider = providerFor(entry)
+  const station = entry.station === 'network' ? 'web' : String(entry.station || '')
+  return `> ${provider.toUpperCase()} :: ${station.toUpperCase()} :: ${String(entry.label || '').replace(/\s+/g, ' ')}`.slice(0, 64)
+}
 function ticker(entries, active, now, key = 'default') {
-  const wanted = active.at(-1) || [...entries].reverse().find(e => e.endedAt && now - e.endedAt >= 0 && now - e.endedAt < 8000)
+  const wanted = active.at(-1) || [...entries].reverse().find(e => e.endedAt && now - e.endedAt >= 0 && now - e.endedAt < TICKER_LINGER_MS)
   const hold = tickerHolds.get(key)
-  let focus = wanted
-  if (hold && now - hold.since >= 0 && now - hold.since < TICKER_HOLD_MS) {
-    focus = entries.find(e => e.id === hold.id) || wanted
+  let focus = wanted, since = now
+  const held = hold && entries.find(e => e.id === hold.id)
+  if (held && now - hold.since >= 0 && (now - hold.since < tickerHoldMs(tickerText(held)) || !wanted || wanted.id === held.id)) {
+    focus = held
+    since = hold.since
   }
+  if (focus && focus.status !== 'run' && !(held && focus === held) && !(focus.endedAt && now - focus.endedAt < TICKER_LINGER_MS)) focus = undefined
   if (focus && (!hold || hold.id !== focus.id)) tickerHolds.set(key, { id: focus.id, since: now })
+  if (held && focus === held && held.status !== 'run' && now - (held.endedAt || held.startedAt || 0) > TICKER_LINGER_MS && now - hold.since > tickerHoldMs(tickerText(held))) focus = undefined
   if (!focus) return `<text x="450" y="468" fill="#849ab2" font-size="10" letter-spacing="3" text-anchor="middle">AWAITING INPUT</text>`
-  const provider = providerFor(focus), color = COLORS[provider]
-  const station = focus.station === 'network' ? 'web' : String(focus.station || '')
-  const text = `> ${provider.toUpperCase()} :: ${station.toUpperCase()} :: ${String(focus.label || '').replace(/\s+/g, ' ')}`.slice(0, 64)
+  const color = COLORS[providerFor(focus)]
+  const text = tickerText(focus)
   const charWidth = 6.05, width = text.length * charWidth, x0 = 450 - width / 2
   const running = focus.status === 'run'
-  const cursor = running ? `<rect class="cursor" x="${(x0 + width + 3).toFixed(1)}" y="459" width="6" height="11" fill="${color}" opacity=".85"/>` : ''
-  return `<text x="${x0.toFixed(1)}" y="468" fill="${color}" opacity="${running ? 1 : .75}" font-size="11" textLength="${width.toFixed(1)}" lengthAdjust="spacing">${esc(text)}</text>${cursor}`
+  const shown = Math.max(0, now - since)
+  const chars = [...text].map((c, k) => `<tspan class="tk" style="animation-delay:${((k * TICKER_CHAR_MS - shown) / 1000).toFixed(3)}s">${esc(c)}</tspan>`).join('')
+  const typeMs = text.length * TICKER_CHAR_MS
+  const anim = `tkcur${text.length}`
+  const cursor = `<style>@keyframes ${anim}{to{transform:translateX(${width.toFixed(1)}px)}}</style><rect class="cursor" x="${(x0 + 1).toFixed(1)}" y="459" width="6" height="11" fill="${color}" opacity="${running ? .85 : .45}" style="animation:blink 1s steps(1) infinite,${anim} ${(typeMs / 1000).toFixed(3)}s steps(${text.length},end) ${(-shown / 1000).toFixed(3)}s both"/>`
+  return `<style>.tk{opacity:0;animation:tkIn .01s steps(1,end) both}@keyframes tkIn{to{opacity:1}}@media(prefers-reduced-motion:reduce){.tk{animation:none;opacity:1}}</style>`
+    + `<text x="${x0.toFixed(1)}" y="468" fill="${color}" opacity="${running ? 1 : .75}" font-size="11" textLength="${width.toFixed(1)}" lengthAdjust="spacing" style="white-space:pre">${chars}</text>${cursor}`
 }
 
 module.exports = drawMap

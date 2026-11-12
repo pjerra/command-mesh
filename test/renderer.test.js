@@ -37,17 +37,22 @@ test('renderer: core name shows session multiplier, no SESSIONS line', () => {
   assert.ok(!svg.includes('SESSIONS'), 'no SESSIONS line');
 });
 
-test('renderer: a ticker line stays at least 5 s even when newer calls start, and shows its full text at once', () => {
+test('renderer: a ticker line types slowly, stays readable, then lingers before AWAITING INPUT', () => {
   const drawMap = require('../futuristic-renderer');
   const key = 'ticker-test-' + Math.random();
+  const plain = svg => svg.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, '');
   const t0 = 1_700_000_000_000;
   const one = { id: 'a', provider: 'claude', station: 'shell', label: 'Bash git', status: 'run', startedAt: t0 };
   const two = { id: 'b', provider: 'omp', station: 'files', label: 'read src/app.ts', status: 'run', startedAt: t0 + 1000 };
   const first = drawMap({ entries: [one] }, t0 + 100, { tickerKey: key });
-  assert.match(first, /CLAUDE :: SHELL :: Bash git/);
-  assert.doesNotMatch(first, /<animate attributeName="width"/, 'no typing animation that can leave the line blank');
-  const held = drawMap({ entries: [one, two] }, t0 + 3000, { tickerKey: key });
-  assert.match(held, /CLAUDE :: SHELL :: Bash git/, 'still the first line inside the hold time');
-  const next = drawMap({ entries: [{ ...one, status: 'ok', endedAt: t0 + 2000 }, two] }, t0 + 5200, { tickerKey: key });
-  assert.match(next, /OMP :: FILES :: read src\/app.ts/, 'switches after the hold time');
+  assert.match(plain(first), /CLAUDE :: SHELL :: Bash git/);
+  assert.match(first, /class="tk" style="animation-delay:/, 'characters type in one by one');
+  assert.doesNotMatch(first, /<animate attributeName="width"/);
+  const held = drawMap({ entries: [one, two] }, t0 + 6000, { tickerKey: key });
+  assert.match(plain(held), /CLAUDE :: SHELL :: Bash git/, 'still the first line while it is typed and read');
+  const next = drawMap({ entries: [{ ...one, status: 'ok', endedAt: t0 + 2000 }, two] }, t0 + 8000, { tickerKey: key });
+  assert.match(plain(next), /OMP :: FILES :: read src\/app.ts/, 'switches after typing + reading time');
+  const ended = { ...two, status: 'ok', endedAt: t0 + 9000 };
+  assert.match(plain(drawMap({ entries: [ended] }, t0 + 18000, { tickerKey: key })), /OMP :: FILES/, 'a finished line lingers');
+  assert.match(plain(drawMap({ entries: [ended] }, t0 + 23000, { tickerKey: key })), /AWAITING INPUT/, 'then clears');
 });
