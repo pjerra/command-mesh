@@ -82,3 +82,4 @@
 .usage-chart .useg.omp{background:linear-gradient(#53f4dd,#1d6a6e)}
 @media(max-width:900px){.usage-when{margin-left:0;width:100%;text-align:left}}
 @media(max-width:1050px) and (min-width:601px){.kpis{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.telemetry .telemetry-head{margin-top:14px;padding-top:12px;border-top:1px solid #1d2d40}

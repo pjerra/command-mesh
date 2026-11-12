@@ -30,7 +30,7 @@ test('server: /state returns state and svg, / returns html, /nope is 404', async
   }
 });
 
-test('server: /state carries usage.periods and the period param changes the core pills', async () => {
+test('server: /state carries usage.periods and the period param selects the period', async () => {
   const fs = require('fs');
   const os = require('os');
   const path = require('path');
@@ -68,12 +68,10 @@ test('server: /state carries usage.periods and the period param changes the core
       assert.ok(today.state.usage.periods[period].bars.length > 0, `${period} has bars`);
     }
     assert.strictEqual(today.state.usage.period, 'today', 'the default period is today');
-    assert.ok(today.svg.includes('EST $0.01 · 1.1K tok'), 'the today core pill shows the today total');
-    assert.ok(!today.svg.includes('EST $0.02'), 'the week-only cost is not in the today pill');
+    assert.ok(!/EST \$| tok</.test(today.svg), 'the cores carry no cost pill');
 
     const week = await (await fetch(base + '/state?period=week')).json();
     assert.strictEqual(week.state.usage.period, 'week');
-    assert.ok(week.svg.includes('EST $0.02 · 3.3K tok'), 'the same core pill follows the week period');
 
     const bad = await (await fetch(base + '/state?period=nope')).json();
     assert.strictEqual(bad.state.usage.period, 'today', 'an unknown period falls back to today');

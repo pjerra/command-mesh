@@ -57,7 +57,7 @@ test('renderer: a ticker line types slowly, stays readable, then lingers before 
   assert.match(plain(drawMap({ entries: [ended] }, t0 + 23000, { tickerKey: key })), /AWAITING INPUT/, 'then clears');
 });
 
-test('renderer: each core with cost shows its line; codex shows ~', () => {
+test('renderer: cores show no cost or token pill, only the +$ pop', () => {
   const t = 1_700_000_000_000;
   const board = {
     entries: [],
@@ -72,8 +72,6 @@ test('renderer: each core with cost shows its line; codex shows ~', () => {
     sessions: { claude: 1, codex: 1, omp: 1 },
   };
   const svg = drawMap(board, t);
-  assert.ok(svg.includes('EST $1.23'), 'claude line: EST $1.23');
-  assert.ok(svg.includes('EST ~$0.40'), 'codex line: EST ~$0.40');
-  assert.ok(svg.includes('COST $0.12'), 'omp line: COST $0.12');
+  assert.ok(!/EST \$|EST ~\$|COST \$| tok</.test(svg), 'no cost or token pill under or over the cores');
   assert.ok(svg.includes('+$0.003'), 'the newest cost floats up for every core');
 });
