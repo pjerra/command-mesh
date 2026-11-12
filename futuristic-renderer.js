@@ -29,6 +29,14 @@ const credits = value => {
   const n = Number(value) || 0
   return n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)
 }
+// 1234 -> 1.2K, 3_400_000 -> 3.4M, 1_100_000_000 -> 1.1B.
+const fmtTokens = value => {
+  const n = Number(value) || 0
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1).replace(/\.0$/, '')}B`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}K`
+  return String(Math.round(n))
+}
 // The SVG is rebuilt every frame, so one-shot effects use a negative delay equal to their age.
 // The browser then resumes each animation exactly where the previous frame left it.
 const since = ms => `animation-delay:${(-ms / 1000).toFixed(3)}s`
@@ -142,19 +150,27 @@ function drawMap(board, now, opts = {}) {
     } else {
       body += `<path d="${hexPath(x, y, 34)}" fill="#0b1a27" stroke="${lit ? color : '#385267'}" stroke-width="${lit ? 2.4 : 1.4}"/><path d="${hexPath(x, y, 23)}" fill="${color}" fill-opacity="${lit ? '.28' : '.09'}" stroke="${color}" stroke-opacity="${lit ? '.8' : '.25'}"/><text x="${x}" y="${y + 5}" text-anchor="middle" fill="${lit ? '#efffff' : '#7890a7'}" font-size="13">${String(providerEntries.length).padStart(2,'0')}</text><circle cx="${x - 34}" cy="${y - 29}" r="3.5" fill="${running ? color : '#3c566a'}"/><text x="${x}" y="${y + 48}" text-anchor="middle" fill="${lit ? color : '#9bb0c4'}" font-size="11" letter-spacing="1.7">${provider.label}${(board.sessions?.[provider.id] || 0) > 1 ? " ×" + board.sessions[provider.id] : ""}</text><rect x="${x - 50}" y="${y + 54}" width="100" height="17" rx="8.5" fill="#07111c" stroke="${color}" stroke-opacity="${lit ? '.45' : '.18'}"/><text x="${x}" y="${y + 65.5}" text-anchor="middle" fill="#9bb0c4" font-size="8.5">${esc(String(model).slice(0, 22))}</text>`
     }
-    const usage = board.usage?.[provider.id]
-    if (usage && !offline) {
-      const amount = `$${Number(usage.session || 0).toFixed(2)}`
+    const history = board.usage && board.usage.periods ? board.usage : null;
+    const periodPer = history ? ((history.periods[history.period] || history.periods.today || {}).per || null) : null;
+    const usage = periodPer ? periodPer[provider.id] : board.usage?.[provider.id]
+    const hasUsage = usage && (periodPer ? (Number(usage.cost) || 0) > 0 || (Number(usage.tokens) || 0) > 0 : true)
+    if (hasUsage && !offline) {
+      const cost = periodPer ? Number(usage.cost) || 0 : Number(usage.session) || 0
+      const amount = `$${cost.toFixed(2)}`
+      const tokens = periodPer ? ` · ${fmtTokens(usage.tokens)} tok` : ''
       // Claude and Codex costs are computed from token usage; Codex is rough, hence the tilde.
-      const line = provider.id === 'claude' ? `EST ${amount}` : provider.id === 'codex' ? `EST ~${amount}` : `COST ${amount}`
+      const line = (provider.id === 'claude' ? `EST ${amount}` : provider.id === 'codex' ? `EST ~${amount}` : `COST ${amount}`) + tokens
       // A pill sized to its text, in the agent's colour. The two top cores put it above the hexagon: below it the
       // OMP core (drawn later) would cover the line. The bottom core keeps it under its model pill.
       const pillW = Math.round(line.length * 6.2 + 16), pillY = provider.id === 'omp' ? y + 76 : y - 58
       body += `<rect x="${(x - pillW / 2).toFixed(1)}" y="${pillY}" width="${pillW}" height="15" rx="7.5" fill="#07111c" stroke="${color}" stroke-opacity=".35"/>`
       body += `<text x="${x}" y="${pillY + 11}" text-anchor="middle" fill="${color}" font-size="10" letter-spacing=".8">${line}</text>`
-      const usageAge = now - (Number(usage.lastAt) || 0)
+      const last = history && history.lastAdd ? history.lastAdd[provider.id] : null
+      const lastAt = last ? last.at : usage.lastAt
+      const lastCost = last ? last.cost : usage.last
+      const usageAge = now - (Number(lastAt) || 0)
       const fresh = usageAge >= 0 && usageAge < 2600
-      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+$${Number(usage.last || 0).toFixed(3)}</text>`
+      if (fresh) body += `<text class="float-up" x="${x + 42}" y="${y + 12}" fill="${color}" font-size="12" font-weight="bold" style="${since(usageAge)}">+$${Number(lastCost || 0).toFixed(3)}</text>`
     }
     body += `<title>${provider.label} · ${offline ? 'offline' : running ? running + ' active' : 'idle'} · ${esc(model)} · ${board.sessions?.[provider.id] || 0} sessions</title></g>`
   })

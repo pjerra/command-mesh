@@ -37,3 +37,42 @@
 #modes button{background:#101c2c;border:1px solid #30445e;color:#91a7c2;border-radius:4px;padding:6px 14px;font:10px Consolas,monospace;letter-spacing:1.5px;cursor:pointer}
 #modes button:hover{background:#16363d;color:#53f4dd;border-color:#53f4dd88}
 #modes button[aria-pressed="true"]{background:#16363d;color:#53f4dd;border-color:#53f4dd88;box-shadow:0 0 10px #53f4dd22}
+
+/* USAGE panel: period tabs, per-agent cost/token table and a stacked cost chart. */
+.usage{margin-top:10px;padding:8px 10px;border:1px solid #22354c;border-radius:6px;font:10px Consolas,monospace;min-width:0}
+.usage-head{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.usage-head .eyebrow{color:#8ea6bd;letter-spacing:1.6px}
+.usage-tabs{display:flex;gap:4px}
+.usage-tab{background:#0d1826;border:1px solid #2b3f57;color:#8ea6bd;border-radius:3px;padding:2px 8px;font:10px Consolas,monospace;cursor:pointer}
+.usage-tab:hover{color:#53f4dd;border-color:#53f4dd88}
+.usage-tab.active{color:#060b13;background:#53f4dd;border-color:#53f4dd}
+.usage-when{margin-left:auto;color:#718aa6;text-align:right}
+.usage-loading{margin-left:8px;color:#ffb86b}
+.usage-table{overflow-x:auto;margin-top:7px}
+.usage-table table{border-collapse:collapse;min-width:560px;width:100%}
+.usage-table th{color:#718aa6;font-weight:400;text-transform:uppercase;letter-spacing:.8px;padding:3px 6px;text-align:right;white-space:nowrap}
+.usage-table td{padding:4px 6px;text-align:right;white-space:nowrap;border-top:1px solid #16283c}
+.usage-table th:first-child,.usage-table td:first-child{text-align:left}
+.udot{font-size:9px}
+.udot.claude{color:#ff9d6b}
+.udot.codex{color:#a28aff}
+.udot.omp{color:#53f4dd}
+.usage-split{width:22%}
+.usplit{display:flex;height:9px;min-width:90px;border-radius:2px;overflow:hidden;background:#12202f}
+.usplit .useg{display:block;min-width:1px}
+.usage-row.claude .usplit .useg{background:#ff9d6b}
+.usage-row.codex .usplit .useg{background:#a28aff}
+.usage-row.omp .usplit .useg{background:#53f4dd}
+.usplit .input{opacity:1}
+.usplit .read{opacity:.68}
+.usplit .write{opacity:.44}
+.usplit .out{opacity:.26}
+.usage-total td{color:#c6d6e9;font-weight:600;border-top:1px solid #2b3f57}
+.usage-chart-head{margin-top:9px;color:#718aa6;letter-spacing:1.2px}
+.usage-chart{display:flex;align-items:flex-end;gap:3px;height:48px;margin-top:5px}
+.usage-chart .ubar{display:flex;flex-direction:column-reverse;flex:1;min-width:2px;min-height:2px;overflow:hidden;border-radius:1px}
+.usage-chart .useg{display:block;width:100%;min-height:1px}
+.usage-chart .useg.claude{background:linear-gradient(#ff9d6b,#865627)}
+.usage-chart .useg.codex{background:linear-gradient(#a28aff,#463a86)}
+.usage-chart .useg.omp{background:linear-gradient(#53f4dd,#1d6a6e)}
+@media(max-width:900px){.usage-when{margin-left:0;width:100%;text-align:left}}

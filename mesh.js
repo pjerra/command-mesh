@@ -16,10 +16,14 @@ const omp = require('./lib/sources/omp');
 const { startCodexLog } = require('./lib/sources/codex-log');
 const { startLimits } = require('./lib/limits');
 const { startDemo } = require('./lib/demo');
+const { createLedger } = require('./lib/usage/ledger');
+const { startCollector } = require('./lib/usage/collector');
+
+const PERIODS = ['hour', 'today', 'week', 'month'];
 
 const dashboardCss = fs.readFileSync(path.join(__dirname, 'dashboard.css'), 'utf8');
 function parseArgs(argv) {
-  const out = { port: null, home: null, only: '', noLimits: false };
+  const out = { port: null, home: null, only: '', noLimits: false, noHistory: false, cacheFile: null };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--port' && i + 1 < argv.length) out.port = Number(argv[++i]);
@@ -29,16 +33,36 @@ function parseArgs(argv) {
     else if (arg === '--only' && i + 1 < argv.length) out.only = argv[++i];
     else if (arg.startsWith('--only=')) out.only = arg.slice('--only='.length);
     else if (arg === '--no-limits') out.noLimits = true;
+    else if (arg === '--no-history') out.noHistory = true;
+    else if (arg === '--cache-file' && i + 1 < argv.length) out.cacheFile = argv[++i];
+    else if (arg.startsWith('--cache-file=')) out.cacheFile = arg.slice('--cache-file='.length);
     else if (arg === '--help' || arg === '-h') out.help = true;
   }
   return out;
 }
 
-function start({ port, home, only = '', timers = true, noLimits = false, now = Date.now, demoIdleMs = 60e3 } = {}) {
+function start({ port, home, only = '', timers = true, noLimits = false, now = Date.now, demoIdleMs = 60e3, noHistory = false, cacheFile = null } = {}) {
   const resolvedPort = port ?? (process.env.MESH_PORT ? Number(process.env.MESH_PORT) : 4777);
   const resolvedHome = home || os.homedir();
   const board = createBoard({});
+  const ledger = createLedger({ now });
+  const collector = noHistory ? null : startCollector({
+    ledger,
+    home: resolvedHome,
+    now,
+    timers,
+    cacheFile: cacheFile || undefined,
+  });
+  if (collector) {
+    console.log(`usage history: loading from ${collector.cacheFile}`);
+    collector.ready.then(() => {
+      console.log(`usage history: ready (${collector.files} files, ${(collector.elapsedMs / 1000).toFixed(1)} s)`);
+    }).catch(() => {});
+  } else {
+    console.log('usage history: disabled (--no-history)');
+  }
   let demoBoard = createBoard({ now });
+  let demoLedger = null;
   let demo = null;
   let demoSeed = 0;
   let demoLast = 0;
@@ -69,8 +93,9 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     checkDemoIdle();
     if (!demo) {
       demoBoard = createBoard({ now });
+      demoLedger = createLedger({ now });
       demoSeed += 1;
-      demo = startDemo({ board: demoBoard, now, timers, seed: demoSeed });
+      demo = startDemo({ board: demoBoard, ledger: demoLedger, now, timers, seed: demoSeed });
       demo.step(0);
     }
     demoLast = now();
@@ -98,7 +123,18 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
       const wantDemo = parsed.searchParams.get('demo') === '1';
       if (wantDemo) ensureDemo();
       else checkDemoIdle();
+      const requested = parsed.searchParams.get('period');
+      const period = PERIODS.includes(requested) ? requested : 'today';
       const snapshot = (wantDemo ? demoBoard : board).snapshot();
+      const activeLedger = (wantDemo ? demoLedger : ledger) || ledger;
+      const history = !collector || wantDemo ? { loading: false, progress: 1 } : collector.state();
+      snapshot.usage = {
+        loading: Boolean(history.loading),
+        progress: Number(history.progress) || 0,
+        periods: activeLedger.periods(now()),
+        period,
+        lastAdd: activeLedger.lastAdd,
+      };
       if (wantDemo) snapshot.demo = true;
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       response.end(JSON.stringify({ state: snapshot, svg: drawMap(snapshot, Date.now(), { tickerKey: wantDemo ? 'demo' : 'live' }) }));
@@ -183,17 +219,22 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
       } catch {
         // Ignore dispose errors.
       }
+      try {
+        if (collector) collector.close();
+      } catch {
+        // Ignore cache write errors.
+      }
       server.close(() => resolve());
     });
   }
 
-  return { server, board, tails, codexLog, limits, get demo() { return demo; }, get port() { return actualPort; }, ready, close };
+  return { server, board, tails, codexLog, limits, ledger, collector, get demo() { return demo; }, get port() { return actualPort; }, ready, close };
 }
 
 if (require.main === module) {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
-    console.log('Usage: node mesh.js [--port N] [--home DIR] [--only PREFIX] [--no-limits]');
+    console.log('Usage: node mesh.js [--port N] [--home DIR] [--only PREFIX] [--no-limits] [--no-history] [--cache-file FILE]');
     process.exit(0);
   }
   const handle = start({
@@ -201,6 +242,8 @@ if (require.main === module) {
     home: args.home || os.homedir(),
     only: args.only || '',
     noLimits: args.noLimits || false,
+    noHistory: args.noHistory || false,
+    cacheFile: args.cacheFile || null,
   });
   handle.ready.catch(() => process.exit(1));
   const { close } = handle;

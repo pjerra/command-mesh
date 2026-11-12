@@ -34,6 +34,8 @@ MESH_PORT=4788 node mesh.js
 | `--only PREFIX` | empty | Only record sessions whose working directory starts with PREFIX |
 | `--help` | | Print usage and exit |
 | `--no-limits` | off | Skip the LIMITS strip readers |
+| `--no-history` | off | Do not read the logs for usage history; cost and tokens then count only from this start |
+| `--cache-file FILE` | `<home>/.cache/command-mesh/usage-v1.json` | Where the usage history cache is read and written |
 
 ## Sources
 
@@ -59,11 +61,20 @@ that cache file; without it the row stays hidden. `--no-limits` skips these read
 
 A LIVE | DEMO switch sits in a footer bar under the telemetry panel. DEMO replaces the board with a built-in fake session: three agents on made-up projects, a fake LIMITS strip whose windows slowly fill and wrap, and a DEMO tag next to the title. The live board keeps recording while the demo shows, so LIVE brings back the real activity with nothing lost. The demo reads no data from this machine and is safe for screenshots and recordings. The choice is remembered per browser in localStorage; there is no command line flag.
 
-## Costs
+## Usage history
 
-`Est. cost` in the KPI row sums the three agents, counted since the dashboard started (the board
-lives in memory, so a restart starts over). Hover it to see each agent's share. The same numbers
-are drawn under the cores: `EST $1.23` (Claude), `EST ~$0.40` (Codex), `COST $0.12` (omp).
+Cost and tokens are kept in a persistent ledger, not in memory only. Each agent's usage is bucketed
+by local time and shown in the USAGE panel with Hour (last 60 minutes), Today (since local
+midnight), Week (since Monday 00:00) and Month (since the 1st). The `Est. cost` and `Tokens` KPIs,
+the table and the stacked cost chart all follow the selected tab; the tab is remembered in
+localStorage. Under each core the same period's line appears: `EST $1.23 · 18.4M tok` (Claude),
+`EST ~$0.40 · 8.1M tok` (Codex), `COST $0.12 · 31.0M tok` (omp).
+
+The cache file is `<home>/.cache/command-mesh/usage-v1.json` (override with `--cache-file`). On the
+first start it back-fills the current week and month from the session logs, which can take a minute
+on a machine with several gigabytes of logs; later starts read the cache and only pick up new
+lines. Delete the cache file to rebuild it from the logs. `--no-history` skips the log read and the
+cache entirely, so cost and tokens count only from the moment the process started.
 
 | Agent | Source | How exact |
 | --- | --- | --- |
@@ -73,9 +84,10 @@ are drawn under the cores: `EST $1.23` (Claude), `EST ~$0.40` (Codex), `COST $0.
 
 When both Codex readers see the same turn, only the rollout counts. Prices are USD per 1M tokens
 in `lib/prices.js`; edit that file when they change. Claude entries match the longest model id
-prefix, and an unknown model adds no cost. The Codex table has one `codex-default` entry holding
-GPT-5 list prices, used whatever model Codex runs. A cache write without a 5m/1h split is priced
-as five minutes.
+prefix, and an unknown model adds no cost but its tokens still count. The Codex table has one
+`codex-default` entry holding GPT-5 list prices, used whatever model Codex runs. A cache write
+without a 5m/1h split is priced as five minutes. The cache file holds only counts and the dedupe
+ids (message ids and Codex turn ids); no log text is written to it.
 
 ## Privacy
 
@@ -83,7 +95,7 @@ What is stored: station, short label (tool name plus at most the last two path s
 
 ## Reading the grid
 
-Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under each core that has cost, a line shows it since the dashboard started: `EST $1.23` for Claude, `EST ~$0.40` for Codex, `COST $0.12` for omp. A new cost also floats up as `+$0.003`.
+Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under each core that has cost, a line shows the selected USAGE period: `EST $1.23 · 18.4M tok` for Claude, `EST ~$0.40 · 8.1M tok` for Codex, `COST $0.12 · 31.0M tok` for omp. A new cost also floats up as `+$0.003`.
 
 ## Tests
 

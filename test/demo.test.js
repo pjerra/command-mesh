@@ -94,6 +94,8 @@ test('server: /state?demo=1 serves the demo board, /state stays live, the demo s
     assert.strictEqual(first.state.demo, true);
     assert.ok(first.state.entries.length > 0, 'demo has entries immediately');
     assert.ok(first.state.entries.every(e => e.id.startsWith('demo-')), 'demo ids are prefixed');
+    assert.ok(first.state.usage.periods.week.per.claude.tokens > 0, 'the demo carries its own usage history');
+    assert.ok(first.state.usage.periods.week.per.codex.rough, 'demo codex usage is rough');
     assert.ok(handle.demo, 'the started demo is exposed');
 
     const dir = path.join(home, '.claude', 'projects', 'x');
@@ -216,4 +218,25 @@ test('page: DEMO switches the request to demo=1 and shows the DEMO tag; LIVE swi
   await settle();
   assert.strictEqual(remembered.elements.get('#demo-tag').hidden, false, 'remembered choice restored');
   assert.ok(remembered.urls.at(-1).includes('demo=1'), 'remembered mode fetches the demo board');
+});
+
+test('demo: the demo ledger has every period and all three agents, codex rough', () => {
+  const { createLedger } = require('../lib/usage/ledger');
+  const ledger = createLedger({ now: () => NOW });
+  const board = createBoard({ now: () => NOW });
+  const demo = startDemo({ board, ledger, now: () => NOW, timers: false, seed: 2 });
+  demo.step(0);
+  const before = ledger.periods(NOW);
+  for (const period of ['hour', 'today', 'week', 'month']) {
+    for (const provider of ['claude', 'codex', 'omp']) {
+      assert.ok(before[period].per[provider].tokens > 0, `${period}/${provider} has tokens`);
+    }
+  }
+  assert.strictEqual(before.week.per.codex.rough, true, 'codex is marked rough');
+  assert.strictEqual(before.week.per.claude.rough, false, 'claude is exact');
+
+  demo.step(120e3);
+  const after = ledger.periods(NOW + 120e3);
+  assert.ok(after.hour.per.total.cost > before.hour.per.total.cost, 'the demo feeds the ledger live');
+  demo.dispose();
 });
