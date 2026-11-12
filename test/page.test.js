@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const vm = require('node:vm');
 const { page } = require('../lib/page');
+const { start } = require('../mesh');
 
 function stubElement() {
   const el = {
@@ -26,7 +27,7 @@ function stubElement() {
   return el;
 }
 
-async function renderDashboard(state) {
+async function renderDashboard(state, opts = {}) {
   const html = page('body{}');
   const script = html.split('<script>')[1].split('</script>')[0];
   const stubs = new Map();
@@ -35,6 +36,13 @@ async function renderDashboard(state) {
     return stubs.get(sel);
   };
   const urls = [];
+  const storage = opts.storage || new Map();
+  const notes = [];
+  function StubNotification(title, options) {
+    notes.push({ title, body: options && options.body });
+  }
+  StubNotification.permission = opts.permission || 'granted';
+  StubNotification.requestPermission = async () => StubNotification.permission;
   const context = {
     document: {
       querySelector: sel => forSelector(sel),
@@ -48,8 +56,25 @@ async function renderDashboard(state) {
     setInterval: () => 0,
     setTimeout: () => 0,
     MutationObserver: class { observe() {} disconnect() {} },
+    localStorage: {
+      getItem: key => (storage.has(key) ? storage.get(key) : null),
+      setItem: (key, value) => { storage.set(key, String(value)); },
+      removeItem: key => { storage.delete(key); },
+    },
+    Notification: StubNotification,
     console,
   };
+  if (opts.now !== undefined) {
+    const RealDate = Date;
+    const fixed = opts.now;
+    context.Date = class extends RealDate {
+      constructor(...args) {
+        if (args.length === 0) super(fixed);
+        else super(...args);
+      }
+      static now() { return fixed; }
+    };
+  }
   vm.createContext(context);
   let error = null;
   try {
@@ -61,7 +86,7 @@ async function renderDashboard(state) {
   }
   assert.strictEqual(error, null, `page script threw: ${error && error.stack}`);
   const dashboard = forSelector('#dashboard');
-  return { dashboard: dashboard.innerHTML, element: dashboard, context, urls };
+  return { dashboard: dashboard.innerHTML, element: dashboard, context, urls, notes, storage };
 }
 
 test('page: the script renders the telemetry panel without throwing', async () => {
@@ -206,4 +231,109 @@ test('page: range tabs switch the request and the header; click filters only in 
   context.selectActivityBar(0);
   const unchanged = element.innerHTML;
   assert.ok(unchanged.includes('data-id="claude-you-old"') && unchanged.includes('data-id="claude-you-new"'), 'a click in a long range does nothing');
+});
+
+test('page: alerts fire once per threshold per window per reset, not in demo', async () => {
+  const now = 1_700_000_000_000;
+  const limits = (pct, resetsAt, exhausted = false) => ({
+    omp: {
+      status: 'ok',
+      checkedAt: now,
+      accounts: [{ name: 'OMP go2', windows: [{ label: 'Week', usedPercent: pct, resetsAt, exhausted }] }],
+    },
+  });
+  const state = { entries: [], sessions: [], errors: [], limits: limits(80, now + 4 * 86400e3) };
+  const { context, notes, storage } = await renderDashboard(state, { now });
+
+  context.setAlerts(true);
+  assert.strictEqual(context.checkAlerts(state), 1, '80 percent fires one notification');
+  assert.strictEqual(notes.length, 1);
+  assert.ok(/OMP go2 Week 80 %/.test(notes[0].body), `body was ${notes[0].body}`);
+  assert.ok(/resets in/.test(notes[0].body));
+  assert.strictEqual(context.checkAlerts(state), 0, 'the same threshold does not fire again');
+  assert.strictEqual(notes.length, 1);
+
+  const high = { ...state, limits: limits(95, now + 4 * 86400e3) };
+  assert.strictEqual(context.checkAlerts(high), 1, '95 percent fires again');
+  assert.strictEqual(notes.length, 2);
+  assert.ok(/OMP go2 Week 95 %/.test(notes[1].body));
+  assert.strictEqual(context.checkAlerts(high), 0);
+
+  const out = { ...state, limits: limits(100, now + 4 * 86400e3, true) };
+  assert.strictEqual(context.checkAlerts(out), 1, 'exhaustion fires once');
+  assert.ok(/exhausted/.test(notes[2].body));
+  assert.strictEqual(context.checkAlerts(out), 0);
+
+  const reset = { ...state, limits: limits(96, now + 5 * 86400e3) };
+  assert.strictEqual(context.checkAlerts(reset), 1, 'a new reset period has its own thresholds');
+  assert.ok(storage.get('command-mesh-alerted').includes(String(now + 5 * 86400e3)), 'fired keys remember the reset time');
+
+  context.setMode(true);
+  const demoState = { ...state, limits: limits(99, now + 6 * 86400e3) };
+  assert.strictEqual(context.checkAlerts(demoState), 0, 'demo mode never notifies');
+});
+
+test('burn: last-hour cost and the today projection', async () => {
+  const noon = new Date(2026, 10, 13, 12, 0, 0, 0).getTime();
+  const state = {
+    entries: [],
+    sessions: [],
+    errors: [],
+    usage: {
+      periods: {
+        hour: { per: { claude: { cost: 2 }, codex: { cost: 1 }, omp: { cost: 1 }, total: { cost: 4 } } },
+        today: { per: { claude: { cost: 5 }, codex: { cost: 3 }, omp: { cost: 2 }, total: { cost: 10 } } },
+      },
+    },
+  };
+  const { dashboard } = await renderDashboard(state, { now: noon });
+  assert.ok(dashboard.includes('<span>Burn</span><b>$4/h</b>'), 'the last hour is shown per hour');
+  assert.ok(dashboard.includes('title="Claude $2/h · Codex $1/h · OMP $1/h"'), 'the tooltip splits the burn per agent');
+  assert.ok(dashboard.includes('~$58 today'), 'twelve hours left at $4/h on top of $10 is $58');
+});
+
+test('server: /state carries sessions and errors; page renders both and the row click filters the feed', async () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-sessions-'));
+  const handle = start({ port: 0, home, timers: false, noLimits: true, noHistory: true });
+  await handle.ready;
+  try {
+    const now = Date.now();
+    handle.board.add({
+      id: 'a1', provider: 'claude', station: 'model', label: 'Claude working', status: 'run',
+      startedAt: now - 5e3, project: 'wt-hakkar-r12', detail: { kind: 'Claude turn', session: 'sess-a' },
+    });
+    handle.board.add({
+      id: 'a2', provider: 'claude', station: 'shell', label: 'bash go test', status: 'err',
+      startedAt: now - 20e3, endedAt: now - 19e3, project: 'wt-hakkar-r12',
+      detail: { kind: 'Claude tool', session: 'sess-a' },
+    });
+    handle.board.add({
+      id: 'b1', provider: 'codex', station: 'model', label: 'Codex working', status: 'run',
+      startedAt: now - 10e3, project: 'wt-ony', detail: { kind: 'Codex turn', session: 'sess-b' },
+    });
+
+    const res = await fetch(`http://127.0.0.1:${handle.port}/state`);
+    const body = await res.json();
+    assert.ok(Array.isArray(body.state.sessions), '/state sessions is a list');
+    assert.strictEqual(body.state.sessions.length, 2);
+    assert.ok(Array.isArray(body.state.errors), '/state errors is a list');
+    assert.deepStrictEqual(body.state.errors[0], { count: 1, label: 'bash go test', project: 'wt-hakkar-r12' });
+
+    const { dashboard, context } = await renderDashboard(body.state);
+    assert.ok(dashboard.includes('SESSIONS'), 'the sessions panel is rendered');
+    assert.ok(dashboard.includes('data-session="sess-a"'), 'a row carries the session key');
+    assert.ok(dashboard.includes('FAILING · LAST HOUR'), 'the error spotlight is rendered');
+    assert.ok(dashboard.includes('<b>1×</b> bash go test'), 'the spotlight shows the group');
+    assert.ok(dashboard.includes('data-id="a1"') && dashboard.includes('data-id="b1"'), 'both sessions are in the feed');
+
+    context.selectSession('sess-a');
+    const filtered = context.document.querySelector('#dashboard').innerHTML;
+    assert.ok(filtered.includes('data-id="a1"') && filtered.includes('data-id="a2"'), 'the clicked session keeps its events');
+    assert.ok(!filtered.includes('data-id="b1"'), 'the other session is filtered out');
+  } finally {
+    await handle.close();
+  }
 });

@@ -89,9 +89,45 @@ prefix, and an unknown model adds no cost but its tokens still count. The Codex 
 without a 5m/1h split is priced as five minutes. The cache file holds only counts and the dedupe
 ids (message ids and Codex turn ids); no log text is written to it.
 
+## Sessions panel
+
+Below USAGE, one row per session active in the last 30 minutes, newest first, at most 20 rows plus a
+`+N more` line. Each row shows the project (and `· subagent` for a Claude subagent file), the agent,
+the model, the newest event label, how long it has been idle, today's cost for that session and the
+number of errors in the last 10 minutes. A session that was working and went quiet for more than
+10 minutes with a run still open gets `idle ⚠`; three or more errors in 10 minutes get `errors ⚠`.
+Flagged rows sort first. A finished turn that is simply idle is dimmed, not flagged. Sessions idle
+for more than two hours are forgotten. Click a row to filter the event feed to that session or
+project; click it again to clear. Per-session cost comes from the usage ledger: the collector knows
+the log file, Claude names the file after the session id, a subagent file sits under its parent
+session folder, and the Codex rollout name ends with its session id. When a provider cannot be
+mapped the column shows `--`.
+
+`FAILING · LAST HOUR` sits at the right of the panel (below it on narrow screens): up to five
+groups of errors from the last hour, grouped by project and label and sorted by count, for example
+`7× bash go test · wt-hakkar-r12`. Only the short labels are kept, never arguments. The board drops
+events after 30 minutes, so this list is kept separately for an hour (at most 500 entries).
+
+## Burn and forecast
+
+`Burn` sits next to `Est. cost` and shows the cost of the last 60 minutes from the ledger's
+five-minute buckets as `$38/h`, with a per-agent breakdown in the tooltip. The small line under it
+projects today's total: today's cost so far plus the burn multiplied by the hours left until local
+midnight, always written with `~` because it is a projection. Both figures ignore the selected USAGE
+tab: they are always the last hour and today.
+
+Each limit window with usage above 0 percent keeps 30 minutes of samples in memory. When at least
+two samples five or more minutes apart give a positive least-squares slope, the strip shows
+`· full in 1h 10m` after the countdown, in orange under two hours and red under 30 minutes. Nothing
+is shown when the window resets before the forecast would land. The bell button in the LIMITS
+header turns browser notifications on or off (off by default, remembered in localStorage). One
+notification fires when a window first reaches 80 percent, one at 95 percent and one when it is
+exhausted, with the reset time in the body. Each window gets one notification per threshold per
+reset period. Demo mode never notifies.
+
 ## Privacy
 
-What is stored: station, short label (tool name plus at most the last two path segments or the first word of a shell command), status, timestamps, counts, model name, token and dollar cost totals per agent, and whether each agent process is running. What is never stored: prompt text, tool arguments beyond the short label, tool output, or response text. The Codex live log reads turn ids, tool names, durations, cwd, and model from its SQLite rows; prompt text in that log is never read.
+What is stored: station, short label (tool name plus at most the last two path segments or the first word of a shell command), status, timestamps, counts, model name, token and dollar cost totals per agent, and whether each agent process is running. What is never stored: prompt text, tool arguments beyond the short label, tool output, or response text. The Codex live log reads turn ids, tool names, durations, cwd, and model from its SQLite rows; prompt text in that log is never read. The sessions panel and its per-session cost map are in memory only: session ids, project names and the log file path stay in the process and are never written to the cache or served as a path.
 
 ## Reading the grid
 
