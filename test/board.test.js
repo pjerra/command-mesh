@@ -92,3 +92,30 @@ test('board: markCosted is per provider and capped, a rough estimate stays rough
   assert.strictEqual(board.isCosted('omp', 'id-0'), false, 'the oldest id is dropped at the cap');
   assert.strictEqual(board.isCosted('omp', 'id-10000'), true);
 });
+
+test('board: modelsInUse lists every model seen in the last 30 min per agent, newest first, old lines ignored', () => {
+  const { createBoard } = require('../lib/board');
+  let t = 1_700_000_000_000;
+  const board = createBoard({ now: () => t });
+  board.setModel('claude', 'claude-opus-5-5', t - 60e3, 's1');
+  board.setModel('claude', 'claude-haiku-5-5', t - 10e3, 's2');
+  board.setModel('claude', 'claude-sonnet-5-5', t - 40 * 60e3, 's3');
+  board.setModel('omp', 'opencode-go/deepseek-v4.1-flash', t - 5e3, 'o1');
+  const inUse = board.snapshot().modelsInUse;
+  assert.deepStrictEqual(inUse.claude.map(x => x.model), ['haiku-5-5', 'opus-5-5']);
+  assert.deepStrictEqual(inUse.omp.map(x => x.model), ['deepseek-v4.1-flash']);
+  assert.deepStrictEqual(inUse.codex, []);
+  t += 31 * 60e3;
+  assert.deepStrictEqual(board.snapshot().modelsInUse.claude, [], 'they drop out after 30 min');
+});
+
+test('sessions: a model is set only on its own session', () => {
+  const { createSessions } = require('../lib/sessions');
+  const t = 1_700_000_000_000;
+  const sessions = createSessions({ now: () => t });
+  for (const key of ['a', 'b']) sessions.note({ id: key + '1', provider: 'claude', station: 'shell', label: 'Bash git', status: 'ok', startedAt: t - 1000, project: 'p', detail: { session: key } });
+  sessions.setModel('claude', 'haiku-5-5', 'a');
+  sessions.setModel('claude', 'opus-5-5', 'b');
+  const byKey = Object.fromEntries(sessions.rows().map(r => [r.key, r.model]));
+  assert.deepStrictEqual(byKey, { a: 'haiku-5-5', b: 'opus-5-5' });
+});

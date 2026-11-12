@@ -120,3 +120,4 @@
 
 
 .usage-stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.usage-stats .kpi{display:flex;align-items:baseline;gap:8px;padding:5px 12px;min-width:0;cursor:default}.usage-stats .kpi b{font-size:15px;margin:0}.usage-stats .kpi small{color:#7f97b2;font-size:10px}
+.models .msep{font-style:normal;opacity:.45}
