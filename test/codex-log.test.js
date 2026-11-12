@@ -200,35 +200,14 @@ test('board: patch updates project on the newest entry with that id', () => {
 const SAMPLING_BODY = (turn, total, tail = '') =>
   `session_loop{thread_id=T-1}:turn{turn_id=${turn}}: post sampling token usage turn_id=${turn} total_usage_tokens=${total} ${tail}`;
 
-(DatabaseSyncMissing ? test.skip : test)('codex-log: post sampling rows give a rough estimate from the total_usage_tokens deltas, the body is not stored', (t) => {
+(DatabaseSyncMissing ? test.skip : test)('codex-log: post sampling rows are activity only, the body is not stored', (t) => {
   const r = reader(t);
   const turn = '4aaa1111-2222-7333-8444-555566667777';
   r.insert({ target: 'codex_core::session::turn', thread_id: 'T-1', body: SAMPLING_BODY(turn, 1000) });
   r.log.poll();
-  // First row of a thread: the whole context (1000) is new, uncached input.
-  let usage = r.board.snapshot().usage.codex;
-  assert.strictEqual(usage.rough, true, 'the log estimate is marked rough');
-  assert.ok(Math.abs(usage.session - 1000 * 1.25 / 1e6) < 1e-12, 'first row priced as uncached input');
+  assert.strictEqual(r.board.snapshot().usage.codex, undefined, 'the live log source writes no cost');
   r.insert({ target: 'codex_core::session::turn', thread_id: 'T-1', body: SAMPLING_BODY(turn, 1500, 'SECRET-BODY-TEXT') });
   r.log.poll();
-  usage = r.board.snapshot().usage.codex;
-  // Second row: the previous 1000 tokens are cached input, the 500 new tokens are output.
-  const second = 1000 * 0.125 / 1e6 + 500 * 10 / 1e6;
-  assert.ok(Math.abs(usage.last - second) < 1e-12, 'delta priced as cached input plus output');
-  assert.ok(Math.abs(usage.session - (1000 * 1.25 / 1e6 + second)) < 1e-12, 'estimates accumulate');
+  assert.strictEqual(r.board.snapshot().usage.codex, undefined, 'the collector owns the estimate now');
   assert.ok(!JSON.stringify(r.board.snapshot()).includes('SECRET-BODY-TEXT'), 'the log body never reaches the board');
-});
-
-(DatabaseSyncMissing ? test.skip : test)('codex: a turn priced by the rollout is not priced again by the live log', (t) => {
-  const r = reader(t);
-  const priced = '5aaa1111-2222-7333-8444-555566667777';
-  const other = '6aaa1111-2222-7333-8444-555566667777';
-  r.board.markCosted('codex', priced);
-  r.insert({ target: 'codex_core::session::turn', thread_id: 'T-1', body: SAMPLING_BODY(priced, 9000) });
-  r.log.poll();
-  assert.strictEqual(r.board.snapshot().usage.codex, undefined, 'the rollout-priced turn is skipped');
-  r.insert({ target: 'codex_core::session::turn', thread_id: 'T-2', body: SAMPLING_BODY(other, 2000) });
-  r.log.poll();
-  assert.strictEqual(r.board.snapshot().usage.codex.rough, true, 'a turn the rollout did not price is estimated');
-  assert.ok(!r.board.isCosted('codex', other), 'the log does not claim the turn');
 });

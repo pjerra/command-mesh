@@ -91,7 +91,7 @@ test('claude: PreToolUse hook success is skipped, a failing hook is recorded as 
   assert.strictEqual(rec.station, 'hooks');
 });
 
-test('omp: toolCall and toolResult pair up, stop closes the turn, cost is summed', () => {
+test('omp: toolCall and toolResult pair up, stop closes the turn', () => {
   const ctx = ctxFor();
   const s = sess();
   s.key = '/home/user/.omp/agent/sessions/abc.jsonl';
@@ -119,7 +119,6 @@ test('omp: toolCall and toolResult pair up, stop closes the turn, cost is summed
     message: { role: 'toolResult', toolCallId: 'c1', isError: false },
   });
   assert.strictEqual(entries(ctx).find(e => e.id === toolId).status, 'ok');
-  assert.strictEqual(ctx.board.snapshot().usage.omp.session, 1.25);
   omp.handle(ctx, s, {
     type: 'message', id: 'm4', timestamp: new Date(NOW).toISOString(),
     message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'done' }] },
@@ -203,12 +202,7 @@ test('privacy: a prompt text and a bash command argument never appear in JSON.st
   assert.strictEqual(ctx.board.snapshot().entries.find(e => e.id === 'claude-tool-tq').label, 'Bash curl');
 });
 
-const near = (actual, expected, label) => assert.ok(
-  Math.abs(actual - expected) < 1e-12,
-  `${label}: expected ${expected}, got ${actual}`,
-);
-
-test('claude: one reply split over three lines is costed once', () => {
+test('claude: assistant lines leave pricing to the usage ledger', () => {
   const ctx = ctxFor();
   const s = sess();
   s.cwd = '/home/user/demo';
@@ -224,41 +218,10 @@ test('claude: one reply split over three lines is costed once', () => {
   claude.handle(ctx, s, line('a2'));
   claude.handle(ctx, s, line('a3'));
   assert.strictEqual(entries(ctx).length, 0, 'text-only assistant lines add no entries');
-  near(ctx.board.snapshot().usage.claude.session, 0.044, 'three lines of one message costed once');
+  assert.strictEqual(ctx.board.snapshot().usage.claude, undefined, 'the activity source writes no cost');
 });
 
-test('claude: cache_creation split prices 5m and 1h differently; missing split prices all as 5m', () => {
-  const split = ctxFor();
-  const s1 = sess('/x/one.jsonl');
-  s1.cwd = '/home/user/demo';
-  claude.handle(split, s1, {
-    type: 'assistant', uuid: 'b1', sessionId: 's1', timestamp: new Date(NOW).toISOString(),
-    message: {
-      id: 'msg_split', model: 'claude-opus-5-5', stop_reason: null,
-      usage: {
-        cache_creation_input_tokens: 1_000_000,
-        cache_creation: { ephemeral_5m_input_tokens: 400_000, ephemeral_1h_input_tokens: 600_000 },
-      },
-      content: [],
-    },
-  });
-  near(split.board.snapshot().usage.claude.session, 6.8, '400k at 5m + 600k at 1h');
-
-  const flat = ctxFor();
-  const s2 = sess('/x/two.jsonl');
-  s2.cwd = '/home/user/demo';
-  claude.handle(flat, s2, {
-    type: 'assistant', uuid: 'b2', sessionId: 's2', timestamp: new Date(NOW).toISOString(),
-    message: {
-      id: 'msg_flat', model: 'claude-opus-5-5', stop_reason: null,
-      usage: { cache_creation_input_tokens: 1_000_000 },
-      content: [],
-    },
-  });
-  near(flat.board.snapshot().usage.claude.session, 5, 'missing split prices every write as 5m');
-});
-
-test('codex: token_count prices last_token_usage exactly', () => {
+test('codex: token_count touches the session but leaves pricing to the ledger', () => {
   const ctx = ctxFor();
   const s = sess();
   s.cwd = '/home/user/demo';
@@ -273,10 +236,6 @@ test('codex: token_count prices last_token_usage exactly', () => {
       },
     },
   });
-  const usage = ctx.board.snapshot().usage.codex;
-  // Codex counts the cached tokens inside input_tokens, so only 800k are billed as uncached:
-  // 800k*1.25 + 200k*0.125 + 100k*10, per 1M.
-  near(usage.session, 2.025, 'token_count cost');
-  assert.strictEqual(usage.rough, undefined, 'the rollout cost is exact, not rough');
-  assert.strictEqual(ctx.board.isCosted('codex', 'T-cost'), true, 'the turn is marked as priced');
+  assert.strictEqual(ctx.board.snapshot().usage.codex, undefined, 'the activity source writes no cost');
+  assert.strictEqual(ctx.board.snapshot().sessions.codex, 1, 'the session is still touched');
 });
