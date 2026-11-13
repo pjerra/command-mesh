@@ -22,7 +22,7 @@
 .lim-row .dot.claude{color:#ff9d6b}
 .lim-row .dot.codex{color:#a28aff}
 .lim-row .dot.omp{color:#53f4dd}
-.lim-win{display:grid;grid-template-columns:38px minmax(40px,1fr) 46px 112px;align-items:center;column-gap:8px;white-space:nowrap;min-width:0}.lim-label{color:#7f97b2}.lim-pct{text-align:left;color:#c6d6e9}.lim-pct.out{color:#ff728f}.lim-cd{color:#6f88a3;overflow:hidden;text-overflow:ellipsis}
+.lim-win{display:grid;grid-template-columns:38px minmax(40px,1fr) 34px 112px;align-items:center;column-gap:8px;white-space:nowrap;min-width:0}.lim-label{color:#7f97b2}.lim-pct{text-align:left;color:#c6d6e9}.lim-pct.out{color:#ff728f}.lim-cd{color:#6f88a3;overflow:hidden;text-overflow:ellipsis}
 .lim-bar{display:block;width:100%;height:8px;border:1px solid #2a4258;border-radius:3px;overflow:hidden}
 .lim-fill{display:block;height:100%;background:#53f4dd}
 .lim-row.claude .lim-fill{background:#ff9d6b}

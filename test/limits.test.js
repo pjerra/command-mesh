@@ -317,7 +317,7 @@ function runPage(state) {
   })();
 }
 
-test('page: the limits strip renders bars, USED UP, countdown and an unavailable row', async () => {
+test('page: the limits strip renders bars, 100% when used up, countdown and an unavailable row', async () => {
   // The omp account below comes from the real reader (exhausted monthly window), so the
   // exhausted-flag mutation breaks this test too, not just the reader unit test.
   const calls = [];
@@ -355,7 +355,7 @@ test('page: the limits strip renders bars, USED UP, countdown and an unavailable
   };
   const dashboard = await runPage(state);
   assert.ok(dashboard.includes('LIMITS'), 'strip heading present');
-  assert.ok(dashboard.includes('USED UP'), 'exhausted window reads USED UP');
+  assert.ok(dashboard.includes('lim-pct out">100%'), 'an exhausted window reads 100% in red');
   assert.ok(dashboard.includes('84%'), 'percent shown');
   assert.ok(dashboard.includes('unavailable'), 'unavailable row shown');
   assert.ok(dashboard.includes('lim-fill crit'), 'exhausted fill is crit');
