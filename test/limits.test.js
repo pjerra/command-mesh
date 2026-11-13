@@ -344,7 +344,8 @@ test('page: the limits strip renders bars, USED UP, countdown and an unavailable
           name: 'CLAUDE',
           windows: [
             { label: '5h', usedPercent: 84, resetsAt: Date.now() + 83 * 60e3 },
-            { label: 'Week', usedPercent: 54, resetsAt: Date.now() + (5 * 24 + 5) * 3600e3 },
+            { label: 'Week', usedPercent: 54, resetsAt: Date.now() + (5 * 24 + 5) * 3600e3, pace: -25, etaMs: 90 * 60e3 },
+            { label: 'Fable week', usedPercent: 3, resetsAt: Date.now() + 3 * 86400e3, pace: 49, projectedPct: 6 },
           ],
         }],
       },
@@ -358,6 +359,10 @@ test('page: the limits strip renders bars, USED UP, countdown and an unavailable
   assert.ok(dashboard.includes('84%'), 'percent shown');
   assert.ok(dashboard.includes('unavailable'), 'unavailable row shown');
   assert.ok(dashboard.includes('lim-fill crit'), 'exhausted fill is crit');
+  assert.ok(dashboard.includes('lim-pace down">\u221225%'), 'a minus pace is shown in red');
+  assert.ok(dashboard.includes('lim-pace up">+49%'), 'a plus pace is shown in green');
+  assert.ok(dashboard.includes('lim-eta crit">\u2192 full in 1h 30m'), 'running out within 2 h is crit');
+  assert.ok(dashboard.includes('\u2192 6% at reset'), 'a window that lasts shows its % at reset');
 });
 
 test('page: no limits in state renders no strip and no error', async () => {

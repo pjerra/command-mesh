@@ -268,6 +268,13 @@ test('page: alerts fire once per threshold per window per reset, not in demo', a
   assert.strictEqual(context.checkAlerts(reset), 1, 'a new reset period has its own thresholds');
   assert.ok(storage.get('command-mesh-alerted').includes(String(now + 5 * 86400e3)), 'fired keys remember the reset time');
 
+  const soon = { ...state, limits: limits(60, now + 3 * 86400e3) };
+  soon.limits.omp.accounts[0].windows[0].etaMs = 90 * 60e3;
+  const before = notes.length;
+  assert.strictEqual(context.checkAlerts(soon), 1, 'a forecast of full within 2 h fires once');
+  assert.ok(/OMP go2 Week full in 1h 30m at this rate/.test(notes[before].body), `body was ${notes[before].body}`);
+  assert.strictEqual(context.checkAlerts(soon), 0);
+
   context.setMode(true);
   const demoState = { ...state, limits: limits(99, now + 6 * 86400e3) };
   assert.strictEqual(context.checkAlerts(demoState), 0, 'demo mode never notifies');

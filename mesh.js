@@ -72,7 +72,7 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
   }
   let demoActivity = createActivity({ now });
   let demoSessions = createSessions({ now });
-  let demoBoard = createBoard({ now, activity: demoActivity, sessions: demoSessions });
+  let demoBoard = createBoard({ now, activity: demoActivity, sessions: demoSessions, forecast });
   let demoLedger = null;
   let demo = null;
   let demoSeed = 0;
@@ -105,7 +105,7 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     if (!demo) {
       demoActivity = createActivity({ now });
       demoSessions = createSessions({ now });
-      demoBoard = createBoard({ now, activity: demoActivity, sessions: demoSessions });
+      demoBoard = createBoard({ now, activity: demoActivity, sessions: demoSessions, forecast });
       demoLedger = createLedger({ now });
       demoSeed += 1;
       demo = startDemo({ board: demoBoard, ledger: demoLedger, now, timers, seed: demoSeed });
