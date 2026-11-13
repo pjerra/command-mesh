@@ -76,7 +76,7 @@ test('limits: claude file maps session, weekly_all and weekly_scoped, marks stal
   lim.dispose();
   const snap = board.snapshot().limits.claude;
   assert.strictEqual(snap.status, 'ok');
-  assert.deepStrictEqual(snap.accounts[0].windows.map(w => w.label), ['5h', 'Week', 'Fable week']);
+  assert.deepStrictEqual(snap.accounts[0].windows.map(w => w.label), ['5h', 'Week', 'Fable']);
   assert.deepStrictEqual(snap.accounts[0].windows.map(w => w.usedPercent), [84, 54, 49]);
   assert.ok(!('staleMs' in snap.accounts[0]), 'fresh data has no staleness');
 
@@ -345,7 +345,7 @@ test('page: the limits strip renders bars, USED UP, countdown and an unavailable
           windows: [
             { label: '5h', usedPercent: 84, resetsAt: Date.now() + 83 * 60e3 },
             { label: 'Week', usedPercent: 54, resetsAt: Date.now() + (5 * 24 + 5) * 3600e3, pace: -25, etaMs: 90 * 60e3 },
-            { label: 'Fable week', usedPercent: 3, resetsAt: Date.now() + 3 * 86400e3, pace: 49, projectedPct: 6 },
+            { label: 'Fable', usedPercent: 3, resetsAt: Date.now() + 3 * 86400e3, pace: 49, projectedPct: 6 },
           ],
         }],
       },
