@@ -16,6 +16,7 @@ const claude = require('./lib/sources/claude');
 const codex = require('./lib/sources/codex');
 const omp = require('./lib/sources/omp');
 const gemini = require('./lib/sources/gemini');
+const agy = require('./lib/sources/agy');
 const { startCodexLog } = require('./lib/sources/codex-log');
 const { startLimits } = require('./lib/limits');
 const { startDemo } = require('./lib/demo');
@@ -116,7 +117,7 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
     armDemoIdle();
     return demo;
   }
-  const sources = [claude, codex, omp, gemini];
+  const sources = [claude, codex, omp, gemini, agy];
   const tails = sources.map(source => {
     const ctx = { board, now: Date.now, only: only || '' };
     const roots = () => (source.roots ? source.roots(resolvedHome) : [source.root(resolvedHome)]);

@@ -6,7 +6,7 @@ Command Mesh is a standalone local web dashboard that shows coding agent activit
 node mesh.js
 ```
 
-It prints `Command Mesh: http://127.0.0.1:4777/` and the browser shows three cores, CLAUDE, CODEX, and OMP, fed by tailing the session logs of every session on the machine.
+It prints `Command Mesh: http://127.0.0.1:4777/` and the browser shows four cores, CLAUDE, CODEX, OMP and AGY (Antigravity), fed by tailing the session logs of every session on the machine.
 
 ## Attribution
 
@@ -45,6 +45,8 @@ MESH_PORT=4788 node mesh.js
 | Codex sessions | `<home>/.codex/sessions` | CODEX |
 | Codex live log | `<home>/.codex/logs_<N>.sqlite` (highest N, read-only) | CODEX |
 | omp agent sessions | `<home>/.omp/agent/sessions` | OMP |
+| Antigravity CLI (`agy`) | `<home>/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl` | AGY |
+| Gemini CLI | `<home>/.gemini/tmp/<project>/chats` | AGY |
 The board lives in memory in the one `node mesh.js` process. There is no state file.
 
 ## Limits
@@ -53,7 +55,9 @@ A LIMITS strip sits between the KPIs and the activity bars, one row per account:
 `<home>/.claude/cache/usage_monthly.json` (refresh 60 s; missing file means the row is hidden), Codex
 asks `codex app-server` over JSON-RPC (refresh 180 s; the read itself uses no quota), omp runs
 `omp --profile <p> usage -p opencode-go --json` once per profile under `<home>/.omp/profiles`
-(refresh 300 s). Nothing about the accounts is stored beyond the window labels, percents, reset
+(refresh 300 s), and Antigravity runs `agy -p /usage --output-format json` (refresh 300 s; it
+answers from the quota service and calls no model), one row each for its Gemini and its Claude/GPT
+model group. Nothing about the accounts is stored beyond the window labels, percents, reset
 times, plan names, and staleness the strip shows. The Claude row needs a status line that writes
 that cache file; without it the row stays hidden. `--no-limits` skips these readers.
 
@@ -81,6 +85,7 @@ cache entirely, so cost and tokens count only from the moment the process starte
 | Claude | `message.usage` on assistant lines | Exact: input, output, cache read, 5m cache write and 1h cache write are priced separately. One reply spans several lines with the same usage, so it is counted once by message id. |
 | Codex | rollout `token_count` events, or the live log | Rollout costs use the reported tokens and are exact for those tokens. The live log has no token counts, so each model call is estimated from the growth of `total_usage_tokens`; that is what the `~` marks. |
 | omp | `message.usage.cost.total` | Exact: the CLI reports its own dollar cost. |
+| Antigravity / Gemini CLI | `input_tokens`, `cache_read_tokens`, `output_tokens` per model step | Tokens only; the plan is a subscription, so the cost column says `plan`. |
 
 When both Codex readers see the same turn, only the rollout counts. Prices are USD per 1M tokens
 in `lib/prices.js`; edit that file when they change. Claude entries match the longest model id
@@ -131,7 +136,7 @@ What is stored: station, short label (tool name plus at most the last two path s
 
 ## Reading the grid
 
-Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under each core that has cost, a line shows the selected USAGE period: `EST $1.23 · 18.4M tok` for Claude, `EST ~$0.40 · 8.1M tok` for Codex, `COST $0.12 · 31.0M tok` for omp. A new cost also floats up as `+$0.003`. A lit Memory station means Claude loaded memory into a session's starting context, or reloaded it after compaction.
+Colors mean agents. CLAUDE is `#ff9d6b`, CODEX is `#a28aff`, OMP is `#53f4dd`, AGY (Antigravity, which runs Gemini) is `#5aa8ff`. Cores, station cards, routes, packets, the ticker, the activity bars, and the event feed all use the same colors. A working core pulses. An open but quiet core breathes slowly. A dashed gray core marked OFFLINE means the app is not running. A core name such as `CLAUDE ×2` means two sessions of that agent were active in the last two minutes. Under each core that has cost, a line shows the selected USAGE period: `EST $1.23 · 18.4M tok` for Claude, `EST ~$0.40 · 8.1M tok` for Codex, `COST $0.12 · 31.0M tok` for omp. A new cost also floats up as `+$0.003`. A lit Memory station means Claude loaded memory into a session's starting context, or reloaded it after compaction.
 
 ## Tests
 
