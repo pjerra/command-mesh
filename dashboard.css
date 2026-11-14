@@ -132,3 +132,17 @@
 .usage-row.gemini .usplit .useg{background:#5aa8ff}
 .usage-chart .useg.gemini{background:linear-gradient(#5aa8ff,#1d4a7a)}
 .sdot.gemini{color:#5aa8ff}
+
+
+/* Sound controls (header) and the glow pulse on a core. */
+.snd{display:flex;align-items:center;gap:8px;position:relative;font:10px Consolas,monospace;color:#91a7c2}
+.snd button{background:#101c2c;border:1px solid #30445e;color:#91a7c2;border-radius:4px;padding:6px 9px;font:10px Consolas,monospace;letter-spacing:1px;cursor:pointer}
+.snd button:hover,.snd button[aria-pressed=true]{color:#53f4dd;border-color:#53f4dd88}
+.snd button.muted{color:#ff728f;border-color:#ff728f66}
+.snd input[type=range]{width:80px;accent-color:#53f4dd}
+.snd-hint{color:#ffb86b;letter-spacing:1px}
+.snd-menu{position:absolute;right:0;top:34px;z-index:5;display:flex;flex-direction:column;gap:6px;background:#0a1421;border:1px solid #30445e;border-radius:6px;padding:10px 12px;white-space:nowrap;box-shadow:0 10px 30px #000a}
+.snd-menu[hidden],.snd-hint[hidden]{display:none}
+.snd-menu label{cursor:pointer}
+@keyframes sndglow{0%{filter:brightness(2.4) drop-shadow(0 0 14px #fff)}100%{filter:brightness(1) drop-shadow(0 0 0 transparent)}}
+@media(max-width:760px){.snd input[type=range]{width:56px}.snd-hint{display:none}}
