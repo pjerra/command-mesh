@@ -46,9 +46,9 @@ test('board: sessions counts only sessions touched in the last 120 s', () => {
   board.touch('codex', 'c');
   t += 119e3;
   board.touch('omp', 'd');
-  assert.deepStrictEqual(board.snapshot().sessions, { claude: 2, codex: 1, omp: 1 });
+  assert.deepStrictEqual(board.snapshot().sessions, { claude: 2, codex: 1, omp: 1, gemini: 0 });
   t += 2e3;
-  assert.deepStrictEqual(board.snapshot().sessions, { claude: 0, codex: 0, omp: 1 });
+  assert.deepStrictEqual(board.snapshot().sessions, { claude: 0, codex: 0, omp: 1, gemini: 0 });
 });
 
 test('board: setModel cleans, addCost sums and ignores junk, finish patches label', () => {

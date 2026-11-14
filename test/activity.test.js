@@ -25,13 +25,13 @@ test('activity: ranges give 30/24/32/48 bars with the right spans and counts per
   assert.deepStrictEqual(half[29], {
     from: NOW - MINUTE,
     to: NOW,
-    per: { claude: 1, codex: 0, omp: 0 },
+    per: { claude: 1, codex: 0, omp: 0, gemini: 0 },
     stations: { files: 1 },
   });
   assert.deepStrictEqual(half[28], {
     from: NOW - 2 * MINUTE,
     to: NOW - MINUTE,
-    per: { claude: 0, codex: 1, omp: 0 },
+    per: { claude: 0, codex: 1, omp: 0, gemini: 0 },
     stations: { shell: 1 },
   });
   assert.strictEqual(half[0].from, NOW - 30 * MINUTE);
@@ -40,8 +40,8 @@ test('activity: ranges give 30/24/32/48 bars with the right spans and counts per
   assert.strictEqual(two.length, 24);
   assert.strictEqual(two[0].from, NOW - 24 * 5 * MINUTE);
   assert.strictEqual(two[0].to, NOW - 23 * 5 * MINUTE);
-  assert.deepStrictEqual(two[0].per, { claude: 0, codex: 0, omp: 1 });
-  assert.deepStrictEqual(two[23].per, { claude: 1, codex: 1, omp: 0 });
+  assert.deepStrictEqual(two[0].per, { claude: 0, codex: 0, omp: 1, gemini: 0 });
+  assert.deepStrictEqual(two[23].per, { claude: 1, codex: 1, omp: 0, gemini: 0 });
   assert.strictEqual(sum(two, 'claude'), 1);
   assert.strictEqual(sum(two, 'codex'), 1);
   assert.strictEqual(sum(two, 'omp'), 1);
@@ -101,5 +101,5 @@ test('activity: board.add feeds the buckets', () => {
     status: 'run', startedAt: NOW - 30e3, project: 'demo', detail: {},
   });
   const bars = activity.bars('30m', NOW);
-  assert.deepStrictEqual(bars[29].per, { claude: 1, codex: 0, omp: 0 });
+  assert.deepStrictEqual(bars[29].per, { claude: 1, codex: 0, omp: 0, gemini: 0 });
 });

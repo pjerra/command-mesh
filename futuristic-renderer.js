@@ -2,8 +2,8 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const stations = ['you','model','memory','files','shell','web','browser','agents','skills','hooks']
 const names = ['Operator','Model','Memory','Files','Terminal','Network','Browser','Agents','Skills','Hooks']
 // One color per agent, used everywhere that agent shows up: cores, cards, routes, packets, ticker.
-const PROVIDERS = ['claude','codex','omp']
-const COLORS = { claude: '#ff9d6b', codex: '#a28aff', omp: '#53f4dd' }
+const PROVIDERS = ['claude','codex','omp','gemini']
+const COLORS = { claude: '#ff9d6b', codex: '#a28aff', omp: '#53f4dd', gemini: '#5aa8ff' }
 const RED = '#ff728f', IDLE = '#506b85', OFF = '#2b3d4e'
 // Labels that mean an agent finished a turn. They trigger the shockwave on that agent's core.
 const TURN_END = / working$|answer ready|turn complete/i
@@ -12,6 +12,7 @@ const normalizeProvider = value => {
   if (provider.includes('claude')) return 'claude'
   if (provider.includes('codex') || provider.includes('chatgpt')) return 'codex'
   if (provider.includes('omp')) return 'omp'
+  if (provider.includes('gemini')) return 'gemini'
   return ''
 }
 const providerFor = entry => {
@@ -19,6 +20,7 @@ const providerFor = entry => {
   if (explicit) return explicit
   if (String(entry.id || '').startsWith('codex-') || /codex|chatgpt/i.test(String(entry.detail?.kind || ''))) return 'codex'
   if (String(entry.id || '').startsWith('omp-')) return 'omp'
+  if (String(entry.id || '').startsWith('gemini-')) return 'gemini'
   return 'claude'
 }
 const hexPath = (x, y, radius) => Array.from({ length: 6 }, (_, index) => {
@@ -112,18 +114,19 @@ function drawMap(board, now, opts = {}) {
     let pips=''
     PROVIDERS.forEach((p,k)=>{
       const used=events.some(e=>providerFor(e)===p), on=runProviders.includes(p)
-      pips += `<circle cx="${x+158+k*11}" cy="${y+49}" r="${on?3.3:2.4}" fill="${used?COLORS[p]:'#22364a'}" opacity="${used?(on?1:.5):1}"${on?' filter="url(#glow)"':''}/>${on?`<circle cx="${x+158+k*11}" cy="${y+49}" r="2.2" fill="${COLORS[p]}"/>`:''}`
+      pips += `<circle cx="${x+148+k*11}" cy="${y+49}" r="${on?3.3:2.4}" fill="${used?COLORS[p]:'#22364a'}" opacity="${used?(on?1:.5):1}"${on?' filter="url(#glow)"':''}/>${on?`<circle cx="${x+148+k*11}" cy="${y+49}" r="2.2" fill="${COLORS[p]}"/>`:''}`
     })
     const dot=bad ? RED : last ? COLORS[lastProvider] : IDLE
-    body += `<g class="station-card" data-station="${station}" role="button" tabindex="0" aria-label="Filter events by ${names[i]}"><g${glitching?` class="glitch" style="${since(failAge)}"`:''}><rect x="${x}" y="${y}" width="192" height="70" rx="6" fill="#0d1826" stroke="${running?tone:bad&&glitching?RED:'#213349'}"/><path d="M${x} ${y+15}V${y+4}Q${x} ${y} ${x+4} ${y}H${x+20}" fill="none" stroke="${color}" stroke-width="2"/><text x="${x+14}" y="${y+23}" fill="#d4e6f5" font-size="12" letter-spacing="1">${names[i].toUpperCase()}</text><text x="${x+178}" y="${y+23}" fill="${running?tone:bad?RED:'#7d93ab'}" font-size="14" text-anchor="end">${String(count).padStart(2,'0')}</text><circle cx="${x+17}" cy="${y+49}" r="2.5" fill="${dot}"/><text x="${x+27}" y="${y+53}" fill="${running?'#cfe6f2':'#849ab2'}" font-size="10">${esc((last?.label || 'Awaiting signal').slice(0,20))}</text>${pips}${glitching?`<rect class="glitch-flash" x="${x}" y="${y}" width="192" height="70" rx="6" fill="${RED}" style="${since(failAge)}"/>`:''}<title>${esc(last?.label||names[i])}${last?' · '+lastProvider.toUpperCase():''}</title></g></g>`
+    body += `<g class="station-card" data-station="${station}" role="button" tabindex="0" aria-label="Filter events by ${names[i]}"><g${glitching?` class="glitch" style="${since(failAge)}"`:''}><rect x="${x}" y="${y}" width="192" height="70" rx="6" fill="#0d1826" stroke="${running?tone:bad&&glitching?RED:'#213349'}"/><path d="M${x} ${y+15}V${y+4}Q${x} ${y} ${x+4} ${y}H${x+20}" fill="none" stroke="${color}" stroke-width="2"/><text x="${x+14}" y="${y+23}" fill="#d4e6f5" font-size="12" letter-spacing="1">${names[i].toUpperCase()}</text><text x="${x+178}" y="${y+23}" fill="${running?tone:bad?RED:'#7d93ab'}" font-size="14" text-anchor="end">${String(count).padStart(2,'0')}</text><circle cx="${x+17}" cy="${y+49}" r="2.5" fill="${dot}"/><text x="${x+27}" y="${y+53}" fill="${running?'#cfe6f2':'#849ab2'}" font-size="10">${esc((last?.label || 'Awaiting signal').slice(0,19))}</text>${pips}${glitching?`<rect class="glitch-flash" x="${x}" y="${y}" width="192" height="70" rx="6" fill="${RED}" style="${since(failAge)}"/>`:''}<title>${esc(last?.label||names[i])}${last?' · '+lastProvider.toUpperCase():''}</title></g></g>`
   })
 
   const providers = [
-    { id: 'claude', label: 'CLAUDE', x: 394, y: 238, color: COLORS.claude },
-    { id: 'codex', label: 'CODEX', x: 506, y: 238, color: COLORS.codex },
-    { id: 'omp', label: 'OMP', x: 450, y: 342, color: COLORS.omp },
+    { id: 'claude', label: 'CLAUDE', x: 394, y: 228, color: COLORS.claude },
+    { id: 'codex', label: 'CODEX', x: 506, y: 228, color: COLORS.codex },
+    { id: 'omp', label: 'OMP', x: 394, y: 336, color: COLORS.omp },
+    { id: 'gemini', label: 'GEMINI', x: 506, y: 336, color: COLORS.gemini },
   ]
-  body += `<circle cx="450" cy="285" r="112" fill="#081522" stroke="#294256" stroke-width="1.5"/><circle cx="450" cy="285" r="106" fill="none" stroke="#183548" stroke-dasharray="2 8"/><path d="M394 238L506 238L450 342Z" fill="none" stroke="#29485c" stroke-width="1.2" stroke-dasharray="3 6"/><circle cx="450" cy="278" r="7" fill="#112d3b" stroke="#53f4dd" opacity=".8"/>`
+  body += `<circle cx="450" cy="285" r="112" fill="#081522" stroke="#294256" stroke-width="1.5"/><circle cx="450" cy="285" r="106" fill="none" stroke="#183548" stroke-dasharray="2 8"/><path d="M394 228L506 228L506 336L394 336Z" fill="none" stroke="#29485c" stroke-width="1.2" stroke-dasharray="3 6"/><circle cx="450" cy="282" r="7" fill="#112d3b" stroke="#53f4dd" opacity=".8"/>`
   providers.forEach((provider, k) => {
     const { x, y, color } = provider
     const providerEntries = entries.filter(entry => providerFor(entry) === provider.id)

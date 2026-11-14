@@ -122,3 +122,13 @@
 
 .usage-stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.usage-stats .kpi{display:flex;align-items:baseline;gap:8px;padding:5px 12px;min-width:0;cursor:default}.usage-stats .kpi b{font-size:15px;margin:0}.usage-stats .kpi small{color:#7f97b2;font-size:10px}
 .models .msep{font-style:normal;opacity:.45}
+/* Gemini: the fourth agent, blue. */
+.seg.gemini{background:linear-gradient(#5aa8ff,#1d4a7a)}
+.row[data-provider=gemini]{border-left-color:#5aa8ff}
+.models .m.gemini{color:#5aa8ff}
+.lim-row .dot.gemini{color:#5aa8ff}
+.lim-row.gemini .lim-fill{background:#5aa8ff}
+.udot.gemini{color:#5aa8ff}
+.usage-row.gemini .usplit .useg{background:#5aa8ff}
+.usage-chart .useg.gemini{background:linear-gradient(#5aa8ff,#1d4a7a)}
+.sdot.gemini{color:#5aa8ff}
