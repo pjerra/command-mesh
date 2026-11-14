@@ -30,8 +30,7 @@ function harness(stored) {
     document: { querySelector: s => els[s] || null, querySelectorAll: () => [], addEventListener() {} },
   };
   vm.createContext(ctx);
-  const core = require('../lib/sound-core').source;
-  vm.runInContext(core + '\n' + fs.readFileSync(path.join(__dirname, '../lib/sound-ui.client.js'), 'utf8'), ctx);
+  vm.runInContext(require('../lib/sound-client').source, ctx);
   const slide = v => { els['#snd-vol'].value = String(v); (listeners['vol:input'] || []).forEach(f => f({})); };
   return { els, gains, store, slide, ctx, saved: () => JSON.parse(store['command-mesh-sound']) };
 }

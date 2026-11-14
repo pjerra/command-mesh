@@ -11,15 +11,19 @@ const CORES = ['claude', 'codex', 'omp', 'gemini'];
 const setOf = ci => C.CHORDS[ci].set;
 const barEnd = (step, t0) => m.musStepTime((Math.floor(step / 8) + 1) * 8, t0);
 
-test('jazz: 72 BPM, Dm9 - G13 - Cmaj9 - A7b9, one chord per bar', () => {
-  assert.strictEqual(C.BPM, 72);
+test('jazz: default 92 BPM, Dm9 - G13 - Cmaj9 - A7b9, one chord per bar', () => {
+  assert.strictEqual(C.BPM, 92);
+  assert.strictEqual(m.musConst(120).BPM, 120);
+  assert.strictEqual(m.musClampBpm(10), 70);
+  assert.strictEqual(m.musClampBpm(500), 120);
+  assert.strictEqual(m.musClampBpm('abc'), 92);
   const names = s => C.CHORDS[m.musChordIndex(s)].name;
   assert.deepStrictEqual([0, 7, 8, 15, 16, 24, 31, 32].map(names), ['Dm9', 'Dm9', 'G13', 'G13', 'Cmaj9', 'A7b9', 'A7b9', 'Dm9']);
   assert.strictEqual(names(32 * 50 + 9), 'G13');
 });
 
-test('swing: beats are 72 BPM apart, off-8ths land 2:1, next-step maths agrees', () => {
-  const t0 = 10, B = 60 / 72;
+test('swing: beats are 92 BPM apart, off-8ths land 2:1, next-step maths agrees', () => {
+  const t0 = 10, B = 60 / 92;
   assert.ok(Math.abs(m.musStepTime(2, t0) - (t0 + B)) < 1e-9);
   for (let s = 0; s < 40; s += 2) {
     const on = m.musStepTime(s, t0), off = m.musStepTime(s + 1, t0), nxt = m.musStepTime(s + 2, t0);
@@ -158,7 +162,7 @@ test('event motifs: on a beat, jazz roles, pitches picked from the chord at the 
 });
 
 // ---- Run the real browser script against a fake Web Audio and check what it actually schedules. ----
-function rig() {
+function rig(stored) {
   const oscs = [], notes = [];
   const param = () => ({ value: 0, setTargetAtTime() {}, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
   const node = () => ({ connect() {}, gain: param(), frequency: param(), detune: param(), Q: param(), threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() });
@@ -176,53 +180,98 @@ function rig() {
   const ctx = {
     console, Math, Number, String, JSON, Array, Object, Float32Array, Date, setInterval: () => 0, setTimeout: () => 0,
     AudioContext: AC, __trace: n => notes.push(n),
-    localStorage: { getItem: () => null, setItem() {} },
+    localStorage: { getItem: () => (stored ? JSON.stringify(stored) : null), setItem() {} },
     document: { querySelector: () => null, querySelectorAll: () => [], addEventListener() {} },
   };
   vm.createContext(ctx);
-  vm.runInContext(m.source + '\n' + fs.readFileSync(path.join(__dirname, '../lib/sound-ui.client.js'), 'utf8'), ctx);
+  vm.runInContext(require('../lib/sound-client').source, ctx);
   vm.runInContext('sndTrace = __trace; sndEnsure();', ctx);
+  assert.strictEqual(vm.runInContext('sndActive && sndActive.id', ctx), (stored && stored.theme) || 'classic');
   return { ctx, oscs, notes, run: code => vm.runInContext(code, ctx) };
 }
 
-test('page script: every scheduled note (activity + events) is in the current chord, in register, cut at the bar line', () => {
-  const r = rig();
+for (const bpm of [92, 120]) test('page script at ' + bpm + ' BPM: every scheduled note (activity + events) is in the current chord, in register, cut at the bar line', () => {
+  const r = rig({ theme: 'jazz', tempo: bpm });
+  const BE = 60 / bpm;
   let seed = 3; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   r.run('sndWorking = 3');
   const types = ['done', 'input', 'error', 'alert', 'session'];
-  for (let i = 0; i < 1200; i++) { // 1200 * 0.1s = 120 s of simulated playing, about 3.5 loops of 4 bars each... plus more
-    r.ctx.__now = i * 0.1;
+  for (let i = 0; i < 1200; i++) { // 1200 * 0.1s = 120 s of simulated playing
     r.run('sndCtx.currentTime = ' + (i * 0.1));
     if (rnd() < 0.6) r.run('sndPending.' + CORES[Math.floor(rnd() * 4)] + ' = (sndPending.' + CORES[0] + ' || 0) + 1');
     if (rnd() < 0.08) r.run('sndQueuePhrase({type:' + JSON.stringify(types[Math.floor(rnd() * 5)]) + ', core:' + JSON.stringify(CORES[Math.floor(rnd() * 4)]) + '})');
     r.run('sndSchedule()');
   }
   const t0 = r.run('sndT0');
+  assert.strictEqual(r.run('sndBpm'), bpm);
   assert.ok(r.notes.length > 200, 'played a lot: ' + r.notes.length);
   assert.ok(r.notes.some(n => n.event) && CORES.every(c => r.notes.some(n => n.inst === c)));
   const perStep = {};
   r.notes.forEach(n => {
     const ci = m.musChordIndex(n.step), [lo, hi] = C.RANGE[n.inst];
+    assert.strictEqual(n.bpm, bpm);
     assert.ok(setOf(ci).includes(n.midi % 12), n.inst + ' step ' + n.step + ' note ' + n.midi + ' over ' + C.CHORDS[ci].name + (n.event ? ' (event)' : ''));
     assert.ok(n.midi >= lo && n.midi <= hi, n.inst + ' ' + n.midi + ' out of register');
-    assert.ok(Math.abs(n.when - m.musStepTime(n.step, t0)) < 1e-9, 'swung grid time');
-    assert.ok(n.when + n.len <= barEnd(n.step, t0) - C.RELEASE + 1e-9, 'rings past the bar line');
+    assert.ok(Math.abs(n.when - m.musStepTime(n.step, t0, bpm)) < 1e-9, 'swung grid time');
+    assert.ok(n.when + n.len <= m.musStepTime((Math.floor(n.step / 8) + 1) * 8, t0, bpm) - C.RELEASE + 1e-9, 'rings past the bar line');
     (perStep[n.step] = perStep[n.step] || {})[n.inst] = (perStep[n.step][n.inst] || 0) + (n.inst === 'claude' ? 0 : 1);
   });
   // voices (oscillators) never outlive the bar they start in
   r.oscs.forEach(o => {
-    const k = Math.floor((o.start - t0 + 1e-6) / (4 * C.BEAT)), end = t0 + (k + 1) * 4 * C.BEAT;
+    const k = Math.floor((o.start - t0 + 1e-6) / (4 * BE)), end = t0 + (k + 1) * 4 * BE;
     assert.ok(o.stop <= end + 1e-6, 'oscillator stops ' + (o.stop - end) + 's after the bar line');
   });
-  // density: instruments with a new note per step (claude plays 3 notes of ONE chord stab = 1 instrument)
   const byStep = {};
   r.notes.forEach(n => { (byStep[n.step] = byStep[n.step] || new Set()).add(n.inst); });
   Object.values(byStep).forEach(s => assert.ok(s.size <= 3));
   Object.values(perStep).forEach(o => Object.entries(o).forEach(([k, v]) => assert.ok(v <= 1, k + ' played twice in one step')));
 });
 
+test('tempo: re-anchoring keeps the bar line where it was and the swing at 2:1', () => {
+  const t0 = 5, old = 92, nu = 120;
+  for (const bar of [1, 2, 7, 40]) {
+    const step = bar * 8, t1 = m.musRetempo(step, t0, old, nu);
+    assert.ok(Math.abs(m.musStepTime(step, t1, nu) - m.musStepTime(step, t0, old)) < 1e-9, 'same time at the tempo change');
+    for (let s = step; s < step + 16; s += 2) {
+      const on = m.musStepTime(s, t1, nu), off = m.musStepTime(s + 1, t1, nu), nxt = m.musStepTime(s + 2, t1, nu);
+      assert.ok(Math.abs((off - on) / (nxt - off) - 2) < 1e-9);
+      assert.ok(Math.abs(nxt - on - 60 / nu) < 1e-9);
+    }
+    // cuts and chord indices still line up after the change
+    for (let s = step; s < step + 16; s++) assert.ok(m.musStepTime(s, t1, nu) + m.musNoteLen(s, t1, 30, nu) <= m.musStepTime((Math.floor(s / 8) + 1) * 8, t1, nu) - C.RELEASE + 1e-9);
+  }
+});
+
+test('page script: a tempo change waits for the next bar line, then grid and cuts follow the new tempo', () => {
+  const r = rig({ theme: 'jazz', tempo: 92 });
+  r.run('sndWorking = 3');
+  const play = (from, to) => { for (let i = from; i < to; i++) { r.run('sndCtx.currentTime = ' + (i * 0.05) + '; sndPending.codex = 1; sndPending.omp = 1; sndSchedule()'); } };
+  play(0, 130);
+  const at = r.notes.length, t0a = r.run('sndT0');
+  r.run('sndSetTempo(120)');
+  assert.strictEqual(r.run('snd.tempo'), 120);
+  assert.strictEqual(r.run('sndBpm'), 92, 'not applied mid-bar');
+  play(130, 600);
+  assert.strictEqual(r.run('sndBpm'), 120);
+  const after = r.notes.slice(at), t0b = r.run('sndT0');
+  assert.notStrictEqual(t0a, t0b);
+  const switched = after.find(n => n.bpm === 120);
+  assert.ok(switched && switched.step % 8 === 0, 'first note at the new tempo starts a bar: step ' + (switched && switched.step));
+  r.notes.forEach(n => {
+    assert.ok(Math.abs(n.when - m.musStepTime(n.step, n.t0, n.bpm)) < 1e-9);
+    assert.ok(n.when + n.len <= m.musStepTime((Math.floor(n.step / 8) + 1) * 8, n.t0, n.bpm) - C.RELEASE + 1e-9, 'cut before the bar line, step ' + n.step + ' at ' + n.bpm);
+    assert.ok(m.musChordIndex(n.step) >= 0 && C.CHORDS[m.musChordIndex(n.step)].set.includes(n.midi % 12));
+  });
+  // the bar line at the change is continuous: last old-tempo bar end == first new-tempo bar start
+  const last = r.notes.filter(n => n.bpm === 92).pop(), first = switched;
+  assert.ok(Math.abs(m.musStepTime(first.step, first.t0, 120) - m.musStepTime(first.step, last.t0, 92)) < 1e-9);
+  // out-of-range input is clamped
+  r.run('sndSetTempo(5)'); assert.strictEqual(r.run('snd.tempo'), 70);
+  r.run('sndSetTempo(999)'); assert.strictEqual(r.run('snd.tempo'), 120);
+});
+
 test('page script: drums only play while working and when the box is on', () => {
-  const r = rig();
+  const r = rig({ theme: 'jazz' });
   const hits = () => r.oscs.length;
   for (let i = 0; i < 400; i++) { r.run('sndCtx.currentTime = ' + i * 0.1 + '; sndSchedule()'); }
   assert.strictEqual(hits(), 0, 'silent when idle');
@@ -235,7 +284,7 @@ test('page script: drums only play while working and when the box is on', () => 
   assert.strictEqual(hits(), n, 'drums checkbox off = no drums');
 });
 
-test('page: ships the jazz engine and all controls (volume, mute, menu, drums box)', () => {
+test('page: ships both themes and all controls (volume, mute, menu, drums box)', () => {
   const html = page();
   for (const s of ['musStepPlan', 'createConvolver', 'createDynamicsCompressor', 'createBiquadFilter', 'Drums (brushes + ride)', 'snd-toggle', 'snd-vol', 'snd-pct', 'command-mesh-sound']) assert.ok(html.includes(s), s);
   assert.ok(!html.includes('Ambient pad'));

@@ -147,3 +147,7 @@
 @keyframes sndglow{0%{filter:brightness(2.4) drop-shadow(0 0 14px #fff)}100%{filter:brightness(1) drop-shadow(0 0 0 transparent)}}
 @media(max-width:760px){.snd input[type=range]{width:56px}.snd-hint{display:none}}
 .snd-pct{min-width:3.2em;color:#53f4dd;letter-spacing:1px}
+.snd-menu .snd-row{color:#53f4dd;letter-spacing:1px}
+.snd-menu .snd-sep{border-top:1px solid #30445e}
+.snd-menu .snd-tempo{display:flex;align-items:center;gap:6px}
+.snd-menu input[type=range]{width:90px}
