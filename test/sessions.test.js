@@ -103,3 +103,18 @@ test('sessions: usage records map to session keys for Claude files and Codex rol
   const codex = sessions.rows().find(row => row.provider === 'codex');
   assert.strictEqual(codex.costToday, 3, 'a rollout named before the session appeared still maps');
 });
+
+test('sessions: omp cost reaches a session whose key is still the file path', () => {
+  const t = 1_700_000_000_000;
+  const sessions = createSessions({ now: () => t });
+  const file = '/tmp/fake-home/.omp/agent/sessions/-proj/2026-11-14T19-55-07-949Z_01a1dba0-c12d-74f7-bfea-a8f16a89ad82.jsonl';
+  sessions.note({
+    id: 'omp-turn-1', provider: 'omp', station: 'model', label: 'omp working', status: 'ok',
+    startedAt: t - 5e3, endedAt: t - 5e3, project: 'demo',
+    detail: { kind: 'omp turn', session: file },
+  });
+  sessions.cost({ provider: 'omp', file, cost: 0.5, at: t - 1e3 });
+  const row = sessions.rows().find(r => r.key === file);
+  assert.ok(row, 'session row exists');
+  assert.strictEqual(row.costToday, 0.5, 'costToday matches the cost record');
+});
