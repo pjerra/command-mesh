@@ -121,6 +121,10 @@ function reader(t, opts = {}) {
   r.insert({ target: 'codex_core::session::turn', thread_id: 'T-1', body: span(T2) });
   r.log.poll();
   assert.strictEqual(r.entries().find(e => e.id === `codex-turn-${T2}`).status, 'run', 'the next turn opens');
+  r.insert({ target: 'codex_core::stream_events_utils', thread_id: 'T-1', body: span(TURN) });
+  r.log.poll();
+  assert.strictEqual(r.entries().find(e => e.id === `codex-turn-${T2}`).status, 'run', 'a late row of the old turn does not close the new one');
+  assert.strictEqual(turn().status, 'ok', 'and does not reopen the old turn');
 });
 
 (DatabaseSyncMissing ? test.skip : test)('codex-log: the prompt text in the Submission row never reaches the snapshot', (t) => {
