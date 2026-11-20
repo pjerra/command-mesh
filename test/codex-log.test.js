@@ -105,6 +105,24 @@ function reader(t, opts = {}) {
   assert.strictEqual(r.entries().find(e => e.id === `codex-turn-${TURN}`).status, 'ok');
 });
 
+(DatabaseSyncMissing ? test.skip : test)('codex-log: Codex 0.169 span rows open a turn once; repeats neither close nor reopen it', (t) => {
+  const r = reader(t);
+  const T2 = '0ccc1111-2222-7333-8444-555566667777';
+  const span = id => `session_loop{thread_id=T-1}:submission_dispatch{otel.name="op.dispatch.turn_input" submission.id="${id}" codex.op="turn_input"}:codex.turn_input{conversation.id=T-1 turn.id="${id}"}:turn{model=gpt-5.6-sol}: post sampling token usage`;
+  r.insert({ target: 'codex_core::session::turn', thread_id: 'T-1', body: span(TURN) });
+  r.insert({ target: 'codex_core::stream_events_utils', thread_id: 'T-1', body: span(TURN) });
+  r.log.poll();
+  const turn = () => r.entries().find(e => e.id === `codex-turn-${TURN}`);
+  assert.ok(turn() && turn().status === 'run', 'the span row opens the turn and a repeat keeps it running');
+  r.insert({ target: 'codex_app_server::outgoing_message', thread_id: null, body: 'app-server event: turn/completed ok' });
+  r.insert({ target: 'codex_core::stream_events_utils', thread_id: 'T-1', body: span(TURN) });
+  r.log.poll();
+  assert.strictEqual(turn().status, 'ok', 'turn/completed closes it; a late repeat does not reopen it');
+  r.insert({ target: 'codex_core::session::turn', thread_id: 'T-1', body: span(T2) });
+  r.log.poll();
+  assert.strictEqual(r.entries().find(e => e.id === `codex-turn-${T2}`).status, 'run', 'the next turn opens');
+});
+
 (DatabaseSyncMissing ? test.skip : test)('codex-log: the prompt text in the Submission row never reaches the snapshot', (t) => {
   const r = reader(t);
   r.insert({ target: 'codex_core::session::handlers', thread_id: 'T-9', body: SUB_BODY });
