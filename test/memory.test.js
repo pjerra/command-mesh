@@ -57,9 +57,11 @@ test('claude: a new session file records memory loaded once; a subagent file say
     assert.strictEqual(main.status, 'ok');
     assert.strictEqual(main.startedAt, NOW);
     assert.strictEqual(main.endedAt, NOW);
-    const sub = list.find(entry => entry.id === 'claude-mem-sub-session');
+    const sub = list.find(entry => entry.id === 'claude-mem-demo/agent-1');
     assert.ok(sub, 'the subagent file lights Memory too');
     assert.strictEqual(sub.label, 'memory loaded \u00b7 subagent');
+    assert.strictEqual(sub.detail.session, 'demo/agent-1', 'a subagent is keyed by its own file, not the parent sessionId');
+    assert.strictEqual(board.snapshot().sessions.claude, 2, 'the subagent counts as its own session on the map');
 
     fs.appendFileSync(path.join(dir, 'new.jsonl'), promptLine('new2', 'new-session') + '\n');
     tail.discover();

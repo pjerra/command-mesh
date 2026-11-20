@@ -91,7 +91,15 @@ test('sessions: usage records map to session keys for Claude files and Codex rol
   });
   sessions.cost({ provider: 'claude', file: '/home/user/.claude/projects/-home-user-demo/sess-a.jsonl', cost: 1.5, at: t - 60e3 });
   sessions.cost({ provider: 'claude', file: '/home/user/.claude/projects/-home-user-demo/sess-a/subagents/agent-1.jsonl', cost: 0.5, at: t - 30e3 });
-  assert.strictEqual(sessions.rows()[0].costToday, 2, 'a subagent file is billed to its parent session');
+  assert.strictEqual(sessions.rows()[0].costToday, 1.5, 'a subagent file is not billed to its parent session');
+  sessions.note({
+    id: 'a-sub', provider: 'claude', station: 'tools', label: 'Read', status: 'ok',
+    startedAt: t - 4e3, endedAt: t - 4e3, project: 'demo',
+    detail: { kind: 'Claude subagent tool', subagent: true, session: 'sess-a/agent-1' },
+  });
+  const subRow = sessions.rows().find(r => r.key === 'sess-a/agent-1');
+  assert.ok(subRow, 'the subagent is its own session row');
+  assert.strictEqual(subRow.costToday, 0.5, 'a subagent file is billed to its own row');
 
   const id = '019a0000-1111-7222-8333-444455556666';
   sessions.cost({ provider: 'codex', file: `/home/user/.codex/sessions/2026/11/13/rollout-2026-11-13T12-00-00-${id}.jsonl`, cost: 3, at: t - 20e3 });
