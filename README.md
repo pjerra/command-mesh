@@ -45,9 +45,27 @@ MESH_PORT=4788 node mesh.js
 | Codex sessions | `<home>/.codex/sessions` | CODEX |
 | Codex live log | `<home>/.codex/logs_<N>.sqlite` (highest N, read-only) | CODEX |
 | omp agent sessions | `<home>/.omp/agent/sessions` | OMP |
-| Antigravity CLI (`agy`) | `<home>/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl` | AGY |
+| Antigravity CLI (`agy`) | `<home>/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl`, and the same path under every `<home>/.agy-acct<N>` account home | AGY |
 | Gemini CLI | `<home>/.gemini/tmp/<project>/chats` | AGY |
 The board lives in memory in the one `node mesh.js` process. There is no state file.
+
+## Two Antigravity accounts
+
+The second subscription runs the same `agy` with its own HOME: `<home>/.agy-acct2`, a folder of
+symlinks mirroring the real home that holds its own `.gemini/` and `.config/antigravity/` (the
+`agy2` wrapper is `HOME=<home>/.agy-acct2 agy`). Account 1 is `<home>` itself; every other
+`<home>/.agy-acct<N>` (N = 2, 3, ...) whose `.gemini/antigravity-cli` is a real folder, not a
+symlink, is one more account. Only those agent folders are read, never the mirror's other
+symlinks: they point back into the real home, and walking them would count every Claude, Codex
+and omp session a second time.
+
+Sessions carry their account (`acct1`, `acct2`, ...) and are keyed by account plus conversation
+id, so the same id in two accounts stays two sessions; the AGY core, the activity bars and the
+USAGE totals add every account. The LIMITS strip runs `/usage` once per account with the same
+timeout, caching and failure handling as before (`env HOME=<home>/.agy-acct2 agy -p /usage
+--output-format json` for account 2) and shows `AGY acct1` / `AGY acct2` rows. A plan without a
+five-hour bucket simply shows its weekly window; an account whose call fails shows no data without
+hiding the other account's rows.
 
 ## Limits
 
@@ -55,9 +73,9 @@ A LIMITS strip sits between the KPIs and the activity bars, one row per account:
 `<home>/.claude/cache/usage_monthly.json` (refresh 60 s; missing file means the row is hidden), Codex
 asks `codex app-server` over JSON-RPC (refresh 180 s; the read itself uses no quota), omp runs
 `omp --profile <p> usage -p opencode-go --json` once per profile under `<home>/.omp/profiles`
-(refresh 300 s), and Antigravity runs `agy -p /usage --output-format json` (refresh 300 s; it
-answers from the quota service and calls no model), one row each for its Gemini and its Claude/GPT
-model group. Nothing about the accounts is stored beyond the window labels, percents, reset
+(refresh 300 s), and Antigravity runs `agy -p /usage --output-format json` once per account home
+(refresh 300 s; it answers from the quota service and calls no model), two rows each for its Gemini
+and its Claude/GPT model group. Nothing about the accounts is stored beyond the window labels, percents, reset
 times, plan names, and staleness the strip shows. The Claude row needs a status line that writes
 that cache file; without it the row stays hidden. `--no-limits` skips these readers.
 
