@@ -365,6 +365,40 @@ test('page: the limits strip renders bars, 100% when used up, countdown and an u
   assert.ok(dashboard.includes('\u2192 6% at reset'), 'a window that lasts shows its % at reset');
 });
 
+test('page: both Antigravity accounts are labelled in the strip and on their session rows', async () => {
+  const row = (key, account) => ({
+    key, provider: 'gemini', project: 'proj', name: 'proj', model: 'gemini-4-argon', account,
+    label: 'Antigravity working', running: true, idleMs: 1000, errorsRecent: 0, costToday: null, flagged: false,
+  });
+  const state = {
+    entries: [],
+    counts: {},
+    models: {},
+    presence: {},
+    usage: {},
+    sessionCounts: { gemini: 2 },
+    sessions: [row('acct1:c1', 'acct1'), row('acct2:c2', 'acct2')],
+    limits: {
+      gemini: {
+        status: 'ok',
+        checkedAt: NOW,
+        accounts: [
+          { name: 'AGY acct1', plan: 'gemini', windows: [{ label: '5h', usedPercent: 10 }, { label: 'Week', usedPercent: 20 }] },
+          { name: 'AGY acct1', plan: 'claude·gpt', windows: [{ label: '5h', usedPercent: 30 }, { label: 'Week', usedPercent: 40 }] },
+          { name: 'AGY acct2', plan: 'gemini', windows: [{ label: 'Week', usedPercent: 50 }] },
+          { name: 'AGY acct2', plan: 'claude·gpt', windows: [{ label: 'Week', usedPercent: 60 }] },
+        ],
+      },
+    },
+  };
+  const dashboard = await runPage(state);
+  assert.ok(dashboard.includes('AGY acct1'), 'account 1 limits rows');
+  assert.ok(dashboard.includes('AGY acct2'), 'account 2 limits rows');
+  assert.ok(dashboard.includes('AGY acct2</span><span class="smodel">'), 'the account 2 session row is marked');
+  assert.ok(dashboard.includes('AGY acct1</span><span class="smodel">'), 'the account 1 session row is marked');
+  assert.ok(dashboard.includes('50%') && dashboard.includes('60%'), 'account 2 windows render without a five-hour bucket');
+});
+
 test('page: no limits in state renders no strip and no error', async () => {
   const state = { entries: [], counts: {}, models: {}, presence: {}, usage: {}, sessions: {} };
   const dashboard = await runPage(state);

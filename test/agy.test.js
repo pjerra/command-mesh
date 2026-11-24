@@ -6,6 +6,8 @@ const os = require('os');
 const { createBoard } = require('../lib/board');
 const agy = require('../lib/sources/agy');
 const { agyUsage } = require('../lib/usage/parse');
+const { walkJsonl } = require('../lib/tail');
+const { startLimits } = require('../lib/limits');
 
 const NOW = Date.parse('2026-11-14T10:00:00Z');
 const iso = ms => new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z');
@@ -58,7 +60,7 @@ test('agy: a turn with two tools, results in order, the model, the project and t
   const turn = mine.find(e => e.station === 'model');
   assert.strictEqual(turn.status, 'ok', 'a reply with no tool calls ends the turn');
   assert.strictEqual(turn.project, 'proj', 'the project comes from last_conversations.json');
-  assert.strictEqual(session.key, CONV);
+  assert.strictEqual(session.key, `acct1:${CONV}`);
   assert.deepStrictEqual(snap.modelsInUse.gemini.map(x => x.model), ['gemini-3.8-flash-high']);
   const text = JSON.stringify(snap);
   for (const secret of ['secret', 'hunter2']) assert.ok(!text.includes(secret), `${secret} must not reach the board`);
@@ -101,8 +103,8 @@ test('agy limits: /usage JSON becomes two AGY rows (gemini, claude·gpt) with 5h
   ] } } });
   const accounts = parseAgyUsage(out);
   assert.deepStrictEqual(accounts.map(a => [a.name, a.plan, a.windows.map(w => w.label)]), [
-    ['AGY', 'gemini', ['5h', 'Week']],
-    ['AGY', 'claude·gpt', ['5h', 'Week']],
+    ['AGY acct1', 'gemini', ['5h', 'Week']],
+    ['AGY acct1', 'claude·gpt', ['5h', 'Week']],
   ]);
   const [five, week] = accounts[0].windows;
   assert.deepStrictEqual([five.usedPercent, five.exhausted, week.usedPercent, week.resetsAt, week.windowMs],
@@ -121,4 +123,135 @@ test('agy limits: /usage JSON becomes two AGY rows (gemini, claude·gpt) with 5h
   const missing = startLimits({ board, home: '/nowhere', timers: false, run, ompProfiles: [], claudeFile: '/nowhere/x.json', agyBinary: 'agy-not-here' });
   await missing.refresh('gemini');
   assert.strictEqual(set.gemini.status, 'disabled', 'no agy installed: no row');
+});
+
+const CONV2 = '22222222-3333-4444-8555-666666666666';
+
+function seedAgyConversation(cli, conversation) {
+  const logs = path.join(cli, 'brain', conversation, '.system_generated', 'logs');
+  fs.mkdirSync(logs, { recursive: true });
+  fs.mkdirSync(path.join(cli, 'cache'), { recursive: true });
+  fs.writeFileSync(path.join(cli, 'cache', 'last_conversations.json'), JSON.stringify({ '/work/proj': conversation }));
+  const file = path.join(logs, 'transcript_full.jsonl');
+  fs.writeFileSync(file, '');
+  return file;
+}
+
+test('agy: account homes are read separately, keyed by account, and a mirror symlink is not followed', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'mesh-agy-acct-'));
+  const cli1 = path.join(home, '.gemini', 'antigravity-cli');
+  const cli2 = path.join(home, '.agy-acct2', '.gemini', 'antigravity-cli');
+  const file1 = seedAgyConversation(cli1, CONV);
+  const file2 = seedAgyConversation(cli2, CONV2);
+
+  // A profile home mirrors the real home with symlinks: none of them may be walked.
+  fs.mkdirSync(path.join(home, '.claude', 'projects', 'proj'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'projects', 'proj', 'not-agy.jsonl'), '{}');
+  fs.symlinkSync(path.join(home, '.claude'), path.join(home, '.agy-acct2', '.claude'), 'dir');
+  fs.symlinkSync(path.join(cli1, 'brain'), path.join(cli2, 'brain', 'mirror'), 'dir');
+  // Not an account: N = 1, a non-numeric name, and a profile whose .gemini is itself a symlink.
+  fs.mkdirSync(path.join(home, '.agy-acct1', '.gemini', 'antigravity-cli'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.agy-acctx', '.gemini', 'antigravity-cli'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.agy-acct3'), { recursive: true });
+  fs.symlinkSync(path.join(home, '.gemini'), path.join(home, '.agy-acct3', '.gemini'), 'dir');
+
+  assert.deepStrictEqual(agy.accounts(home).map(a => a.label), ['acct1', 'acct2']);
+  const found = [];
+  for (const dir of agy.roots(home)) walkJsonl(dir, 6, found);
+  assert.deepStrictEqual(found.sort(), [file1, file2].sort(), 'only the two real transcripts, no mirror duplicates');
+
+  const board = createBoard({ now: () => NOW });
+  const ctx = { board, now: () => NOW, only: '' };
+  for (const [file, step] of [[file1, 0], [file2, 10]]) {
+    const session = { file };
+    agy.handle(ctx, session, user(step, NOW));
+    agy.handle(ctx, session, plan(step + 1, NOW));
+  }
+  const snap = board.snapshot();
+  const keys = [...new Set(snap.entries.filter(e => e.provider === 'gemini').map(e => e.detail.session))].sort();
+  assert.deepStrictEqual(keys, [`acct1:${CONV}`, `acct2:${CONV2}`], 'each session carries its account');
+  assert.strictEqual(snap.sessions.gemini, 2, 'the AGY core counts both accounts');
+});
+
+test('agy: the same conversation id in two accounts stays two sessions and two usage keys', () => {
+  const file1 = `/home/u/.gemini/antigravity-cli/brain/${CONV}/.system_generated/logs/transcript_full.jsonl`;
+  const file2 = `/home/u/.agy-acct2/.gemini/antigravity-cli/brain/${CONV}/.system_generated/logs/transcript_full.jsonl`;
+  assert.strictEqual(agy.sessionKeyOf(file1), `acct1:${CONV}`);
+  assert.strictEqual(agy.sessionKeyOf(file2), `acct2:${CONV}`);
+  const first = agyUsage(plan(1, NOW), { file: file1 });
+  const second = agyUsage(plan(1, NOW), { file: file2 });
+  assert.strictEqual(first.key, `agy:acct1:${CONV}:1`);
+  assert.strictEqual(second.key, `agy:acct2:${CONV}:1`);
+  assert.notStrictEqual(first.key, second.key);
+});
+
+const agyBucket = (id, window, left, reset) => ({ id, name: 'x', window, remaining_fraction: left, reset_time: reset });
+function agyUsageJson({ fiveHour = true } = {}) {
+  const buckets = (short, week) => [
+    ...(fiveHour ? [agyBucket(`${short}-5`, '5h', 1, '2026-11-14T12:00:00Z')] : []),
+    agyBucket(`${short}-w`, 'weekly', week, '2026-11-21T20:00:00Z'),
+  ];
+  return JSON.stringify({
+    status: 'SUCCESS',
+    command: {
+      name: 'usage',
+      data: {
+        groups: [
+          { name: 'Gemini Models', buckets: buckets('g', 0.75) },
+          { name: 'Claude and GPT models', buckets: buckets('c', 1) },
+        ],
+      },
+    },
+  });
+}
+
+test('agy limits: one /usage call per account; account 2 has no five-hour bucket; labels carry the account', async () => {
+  const board = createBoard({ now: () => NOW });
+  const calls = [];
+  const acct2Home = '/home/u/.agy-acct2';
+  const run = async (cmd, args) => {
+    calls.push([cmd, ...args]);
+    return { code: 0, stdout: cmd === 'env' ? agyUsageJson({ fiveHour: false }) : agyUsageJson() };
+  };
+  const lim = startLimits({
+    board, home: '/nowhere', now: () => NOW, timers: false, run, ompProfiles: [], claudeFile: '/nowhere/x.json',
+    agyBinary: '/bin/agy',
+    agyAccounts: [{ label: 'acct1', home: '/home/u', primary: true }, { label: 'acct2', home: acct2Home, primary: false }],
+  });
+  await lim.refresh('gemini');
+  lim.dispose();
+  const snap = board.snapshot().limits.gemini;
+  assert.strictEqual(snap.status, 'ok');
+  assert.deepStrictEqual(snap.accounts.map(a => [a.name, a.plan, a.windows.map(w => w.label)]), [
+    ['AGY acct1', 'gemini', ['5h', 'Week']],
+    ['AGY acct1', 'claude·gpt', ['5h', 'Week']],
+    ['AGY acct2', 'gemini', ['Week']],
+    ['AGY acct2', 'claude·gpt', ['Week']],
+  ]);
+  const second = snap.accounts.find(a => a.name === 'AGY acct2' && a.plan === 'gemini');
+  const weekly = second.windows[0];
+  assert.deepStrictEqual([weekly.usedPercent, weekly.resetsAt], [25, Date.parse('2026-11-21T20:00:00Z')]);
+  const envCall = calls.find(call => call[0] === 'env');
+  assert.deepStrictEqual(envCall, ['env', `HOME=${acct2Home}`, '/bin/agy', '-p', '/usage', '--output-format', 'json', '--print-timeout', '40s']);
+});
+
+test('agy limits: one account failing leaves the other account intact', async () => {
+  const board = createBoard({ now: () => NOW });
+  const run = async cmd => (cmd === 'env' ? { code: 1, stdout: '' } : { code: 0, stdout: agyUsageJson() });
+  const lim = startLimits({
+    board, home: '/nowhere', now: () => NOW, timers: false, run, ompProfiles: [], claudeFile: '/nowhere/x.json',
+    agyBinary: '/bin/agy',
+    agyAccounts: [{ label: 'acct1', home: '/home/u', primary: true }, { label: 'acct2', home: '/home/u/.agy-acct2', primary: false }],
+  });
+  await lim.refresh('gemini');
+  lim.dispose();
+  const snap = board.snapshot().limits.gemini;
+  assert.strictEqual(snap.status, 'ok');
+  const first = snap.accounts.filter(a => a.name === 'AGY acct1');
+  assert.strictEqual(first.length, 2, 'the working account keeps both group rows');
+  assert.ok(first.every(a => a.windows.length === 2));
+  const failed = snap.accounts.filter(a => a.name === 'AGY acct2');
+  assert.strictEqual(failed.length, 1, 'the failed account gets one no-data row');
+  assert.deepStrictEqual(failed[0].windows, []);
+  assert.strictEqual(failed[0].error, 'no answer');
 });
