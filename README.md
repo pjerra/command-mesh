@@ -42,8 +42,8 @@ MESH_PORT=4788 node mesh.js
 | Source | Folder tailed | Core |
 | --- | --- | --- |
 | Claude Code sessions | `<home>/.claude/projects` | CLAUDE |
-| Codex sessions | `<home>/.codex/sessions` | CODEX |
-| Codex live log | `<home>/.codex/logs_<N>.sqlite` (highest N, read-only) | CODEX |
+| Codex sessions | `<home>/.codex/sessions`, and `<home>/.codex-acct2/sessions` when that second CODEX_HOME exists | CODEX |
+| Codex live log | `<home>/.codex/logs_<N>.sqlite` (highest N, read-only), and the newest log under `<home>/.codex-acct2` | CODEX |
 | omp agent sessions | `<home>/.omp/agent/sessions` | OMP |
 | Antigravity CLI (`agy`) | `<home>/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl`, and the same path under every `<home>/.agy-acct<N>` account home | AGY |
 | Gemini CLI | `<home>/.gemini/tmp/<project>/chats` | AGY |
@@ -67,11 +67,28 @@ timeout, caching and failure handling as before (`env HOME=<home>/.agy-acct2 agy
 five-hour bucket simply shows its weekly window; an account whose call fails shows no data without
 hiding the other account's rows.
 
+## Two Codex accounts
+
+The second ChatGPT/Codex login runs the same CLI with its own CODEX_HOME:
+`<home>/.codex-acct2`. When that folder exists it is read the same way as the first account: its
+`<home>/.codex-acct2/sessions` rollouts are tailed with the same parser, its newest
+`<home>/.codex-acct2/logs_<N>.sqlite` debug log is read on its own cursor, and the usage collector
+walks both, so the CODEX core, the activity bars and the USAGE totals add the two accounts.
+Sessions from it carry the account (`acct2`) and are keyed by account plus session id, so the
+same id in two accounts stays two sessions; the sessions panel labels them `CODEX 2`.
+
+The LIMITS strip runs `codex app-server` once per account, the second as `env
+CODEX_HOME=<home>/.codex-acct2 codex app-server`, and shows a `CODEX` row and a `CODEX 2` row with
+the same 180 s refresh. Each read is its own process: an account that fails, times out or is
+logged out shows no data without hiding the other account's row. A machine without
+`<home>/.codex-acct2` behaves exactly as before: one row, one process.
+
 ## Limits
 
 A LIMITS strip sits between the KPIs and the activity bars, one row per account: Claude reads
 `<home>/.claude/cache/usage_monthly.json` (refresh 60 s; missing file means the row is hidden), Codex
-asks `codex app-server` over JSON-RPC (refresh 180 s; the read itself uses no quota), omp runs
+asks `codex app-server` over JSON-RPC (refresh 180 s; the read itself uses no quota), once more with
+`CODEX_HOME=<home>/.codex-acct2` when that second login exists, omp runs
 `omp --profile <p> usage -p opencode-go --json` once per profile under `<home>/.omp/profiles`
 (refresh 300 s), and Antigravity runs `agy -p /usage --output-format json` once per account home
 (refresh 300 s; it answers from the quota service and calls no model), two rows each for its Gemini

@@ -399,6 +399,37 @@ test('page: both Antigravity accounts are labelled in the strip and on their ses
   assert.ok(dashboard.includes('50%') && dashboard.includes('60%'), 'account 2 windows render without a five-hour bucket');
 });
 
+test('page: the second Codex account is labelled in the strip and on its session rows', async () => {
+  const row = (key, account) => ({
+    key, provider: 'codex', project: 'proj', name: 'proj', model: 'gpt-5.6-sol', account,
+    label: 'Codex working', running: true, idleMs: 1000, errorsRecent: 0, costToday: null, flagged: false,
+  });
+  const state = {
+    entries: [],
+    counts: {},
+    models: {},
+    presence: {},
+    usage: {},
+    sessionCounts: { codex: 2 },
+    sessions: [row('11111111-2222-4333-8444-555555555555', ''), row('acct2:22222222-3333-4444-8555-666666666666', 'acct2')],
+    limits: {
+      codex: {
+        status: 'ok',
+        checkedAt: NOW,
+        accounts: [
+          { name: 'CODEX', plan: 'plus', windows: [{ label: '5h', usedPercent: 10 }, { label: 'Week', usedPercent: 20 }] },
+          { name: 'CODEX 2', plan: 'plus', windows: [{ label: '5h', usedPercent: 30 }, { label: 'Week', usedPercent: 40 }] },
+        ],
+      },
+    },
+  };
+  const dashboard = await runPage(state);
+  assert.ok(dashboard.includes('CODEX 2'), 'the second limits row is labelled');
+  assert.ok(dashboard.includes('CODEX 2</span><span class="smodel">'), 'the account 2 session row is marked');
+  assert.ok(dashboard.includes('CODEX</span><span class="smodel">'), 'the account 1 session row keeps the plain label');
+  assert.ok(dashboard.includes('30%') && dashboard.includes('40%'), 'account 2 windows render');
+});
+
 test('page: no limits in state renders no strip and no error', async () => {
   const state = { entries: [], counts: {}, models: {}, presence: {}, usage: {}, sessions: {} };
   const dashboard = await runPage(state);
