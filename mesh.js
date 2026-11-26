@@ -203,7 +203,8 @@ function start({ port, home, only = '', timers = true, noLimits = false, now = D
         const folders = entry.roots().length;
         console.log(`${entry.source.provider}: ${entry.root}${folders > 1 ? ` + ${folders - 1} profile folders` : ''} (${countFiles(entry)} session files)`);
       }
-      console.log(codexLog.enabled ? `codex live log: ${codexLog.path}` : `codex live log: not available (${codexLog.reason || 'unknown'})`);
+      const logPaths = (codexLog.readers || []).filter(reader => reader.enabled).map(reader => reader.path);
+      console.log(codexLog.enabled ? `codex live log: ${logPaths.join(', ')}` : `codex live log: not available (${codexLog.reason || 'unknown'})`);
       limits.refresh().catch(() => {}).finally(() => {
         const snap = board.snapshot().limits || {};
         const claudeState = snap.claude ? snap.claude.status : 'pending';
